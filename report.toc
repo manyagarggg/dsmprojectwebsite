@@ -1,0 +1,31 @@
+\contentsline {section}{\numberline {1}Problem Statement Formulation}{4}{section.1}%
+\contentsline {subsection}{\numberline {1.1}High-Level Thematic Problem}{4}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Why Sand Mining Is Harmful}{5}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}The Data Integration Challenge}{6}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Primary Relevant Datasets}{7}{subsection.1.4}%
+\contentsline {subsubsection}{\numberline {1.4.1}NDAP Datasets Utilized}{7}{subsubsection.1.4.1}%
+\contentsline {subsubsection}{\numberline {1.4.2}External Datasets Utilized}{8}{subsubsection.1.4.2}%
+\contentsline {subsection}{\numberline {1.5}Exploratory Data Analysis Results}{9}{subsection.1.5}%
+\contentsline {subsubsection}{\numberline {1.5.1}Mining Observations}{9}{subsubsection.1.5.1}%
+\contentsline {subsubsection}{\numberline {1.5.2}Court Documents}{10}{subsubsection.1.5.2}%
+\contentsline {subsubsection}{\numberline {1.5.3}Temporal Trends}{10}{subsubsection.1.5.3}%
+\contentsline {section}{\numberline {2}Database System}{11}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Storing the Data}{11}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Analysis}{11}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}Spatial Distribution and Clustering (spatial\_analysis.ipynb)}{11}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}Construction Demand and Causal Inference (construction\_mining\_analysis.ipynb)}{16}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}Socioeconomic Correlates (police\_\_literacy\_\_marginal\_workers\_\_agriculture.ipynb and household\_and\_crime.ipynb)}{20}{subsubsection.2.2.3}%
+\contentsline {subsubsection}{\numberline {2.2.4}NLP-Based Classification of Illegality (classification.ipynb)}{23}{subsubsection.2.2.4}%
+\contentsline {subsubsection}{\numberline {2.2.5}Water Quality: Ganga and Sangam Sensor Analysis (spatial\_analysis.ipynb, Section 11)}{25}{subsubsection.2.2.5}%
+\contentsline {subsection}{\numberline {2.3}Current State of the Issue}{27}{subsection.2.3}%
+\contentsline {section}{\numberline {3}Key Quantitative Findings and Significant Associations}{29}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Causal Evidence: Construction Demand Drives Illegal Mining}{29}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Spatial Finding: Groundwater Contamination Near Mining Sites}{30}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Socioeconomic Associations}{31}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Environmental Time-Series Findings}{31}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Classification and Enforcement Gap}{32}{subsection.3.5}%
+\contentsline {section}{\numberline {4}Recommendations and Policy Suggestions}{32}{section.4}%
+\contentsline {subsection}{\numberline {4.1}For the Central Government}{32}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}For State Governments}{33}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}For Judicial and Regulatory Bodies}{33}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}For Civil Society and Research}{34}{subsection.4.4}%
