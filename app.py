@@ -222,65 +222,174 @@ def load_data():
 
 # Incident count per district — spatial join with name-match fallback
 # +
-def build_incident_counts(mining_df, india_gdf):
+def build_state_counts(mining_df, india_gdf):
+
+    india_gdf = india_gdf.copy()
+
+    # Find state column in shapefile
+    state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
+
+    if state_field is None or 'state' not in mining_df.columns:
+        india_gdf['incident_count'] = 0
+        return india_gdf
+
+    # Normalize names
+    mining_states = (
+        mining_df['state']
+        .dropna()
+        .str.strip()
+        .str.lower()
+    )
+
+    counts = mining_states.value_counts()
+
+    india_gdf['incident_count'] = (
+        india_gdf[state_field]
+        .str.strip()
+        .str.lower()
+        .map(counts)
+        .fillna(0)
+        .astype(int)
+    )
+
+    return india_gdf
+
+def get_state_gdf(india_gdf):
+
+    state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
+
+    if state_field is None:
+        return india_gdf
+
+    # Dissolve into state-level polygons
+    state_gdf = india_gdf.dissolve(by=state_field, as_index=False)
+
+    return state_gdf, state_field
+
+def build_state_color_counts(mining_df, india_gdf):
+
+    india_gdf = india_gdf.copy()
+
+    state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
+
+    if state_field is None or 'state' not in mining_df.columns:
+        india_gdf['state_color_count'] = 0
+        return india_gdf
+
+    # count incidents per state
+    state_counts = (
+        mining_df['state']
+        .dropna()
+        .str.strip()
+        .str.lower()
+        .value_counts()
+    )
+
+    # assign same state count to all districts in that state
+    india_gdf['state_color_count'] = (
+        india_gdf[state_field]
+        .str.strip()
+        .str.lower()
+        .map(state_counts)
+        .fillna(0)
+        .astype(int)
+    )
+
+    return india_gdf
+
+def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     india_gdf = india_gdf.copy()
     india_gdf['incident_count'] = 0
 
     dist_field  = next((c for c in ['district', 'DISTRICT', 'dtname', 'NAME_2'] if c in india_gdf.columns), None)
     state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
 
-    if len(mining_df) == 0:
-        return india_gdf
+    total_counts = pd.Series(dtype=int)
 
-    # ── Spatial join (preferred) ──────────────────────────────────────
+    # ─────────────────────────────
+    # 1. MINING DF (lat/lon → spatial)
+    # ─────────────────────────────
     try:
         pts = gpd.GeoDataFrame(
             mining_df,
             geometry=gpd.points_from_xy(mining_df['longitude'], mining_df['latitude']),
             crs='EPSG:4326'
         )
-        gdf = india_gdf.copy()
-        if gdf.crs is None:
-            gdf = gdf.set_crs('EPSG:4326')
-        else:
-            gdf = gdf.to_crs('EPSG:4326')
 
+        gdf = india_gdf.to_crs('EPSG:4326')
         joined = gpd.sjoin(pts, gdf[['geometry']], how='left', predicate='within')
-        counts = joined['index_right'].value_counts()
-        india_gdf['incident_count'] = india_gdf.index.map(counts).fillna(0).astype(int)
 
-        # If spatial join found anything, we're done
-        if india_gdf['incident_count'].sum() > 0:
-            return india_gdf
+        spatial_counts = joined['index_right'].value_counts()
+        total_counts = total_counts.add(spatial_counts, fill_value=0)
+
     except Exception:
         pass
 
-    # ── Fallback 1: district name match ──────────────────────────────
-    if dist_field and 'district' in mining_df.columns:
-        counts = (
-            mining_df['district'].dropna()
+    # ─────────────────────────────
+    # 2. NEWS DF (district-based)
+    # ─────────────────────────────
+    if 'District' in news_df.columns:
+        news_counts = (
+            news_df['District']
+            .dropna()
             .str.strip().str.lower()
             .value_counts()
         )
-        matched = (
-            india_gdf[dist_field].str.strip().str.lower()
-            .map(counts).fillna(0).astype(int)
-        )
-        if matched.sum() > 0:
-            india_gdf['incident_count'] = matched
-            return india_gdf
 
-    # ── Fallback 2: state name match (aggregate to state, spread evenly) ──
-    if state_field and 'state' in mining_df.columns:
-        counts = (
-            mining_df['state'].dropna()
+        mapped = (
+            india_gdf[dist_field]
+            .str.strip().str.lower()
+            .map(news_counts)
+            .fillna(0)
+        )
+
+        total_counts = total_counts.add(mapped, fill_value=0)
+
+    # ─────────────────────────────
+    # 3. COURT DF (district-based)
+    # ─────────────────────────────
+    if 'District' in court_df.columns:
+        court_counts = (
+            court_df['District']
+            .dropna()
             .str.strip().str.lower()
             .value_counts()
         )
-        india_gdf['incident_count'] = (
-            india_gdf[state_field].str.strip().str.lower()
-            .map(counts).fillna(0).astype(int)
+
+        mapped = (
+            india_gdf[dist_field]
+            .str.strip().str.lower()
+            .map(court_counts)
+            .fillna(0)
         )
+
+        total_counts = total_counts.add(mapped, fill_value=0)
+
+    # ─────────────────────────────
+    # 4. MINING OBS (lat/lon → spatial)
+    # ─────────────────────────────
+    try:
+        pts_obs = gpd.GeoDataFrame(
+            mining_obs_df,
+            geometry=gpd.points_from_xy(mining_obs_df['longitude'], mining_obs_df['latitude']),
+            crs='EPSG:4326'
+        )
+
+        gdf = india_gdf.to_crs('EPSG:4326')
+        joined_obs = gpd.sjoin(pts_obs, gdf[['geometry']], how='left', predicate='within')
+
+        obs_counts = joined_obs['index_right'].value_counts()
+        total_counts = total_counts.add(obs_counts, fill_value=0)
+
+    except Exception:
+        pass
+
+    # Apply counts
+    india_gdf['incident_count'] = (
+        india_gdf.index.map(total_counts)
+        .fillna(0)
+        .astype(int)
+    )
 
     return india_gdf
 
@@ -288,51 +397,60 @@ def build_incident_counts(mining_df, india_gdf):
 # +
 # Map builder
 # +
-def create_map(mining_df, india_gdf, mining_obs_df):
+def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
 
     m = folium.Map(location=[22.5, 78.9], zoom_start=5,
                    tiles='CartoDB positron', attr='© CartoDB')
     m.fit_bounds([[6.5, 68.1], [35.5, 97.4]])
 
-    india_gdf = build_incident_counts(mining_df, india_gdf)
+    india_gdf = build_incident_counts_all(
+    mining_df, news_df, court_df, mining_obs_df, india_gdf)
+    india_gdf = build_state_color_counts(mining_df, india_gdf)
 
     dist_field  = next((c for c in ['district', 'DISTRICT', 'dtname', 'NAME_2'] if c in india_gdf.columns), None)
     state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
 
-    tooltip_fields  = []
-    tooltip_aliases = []
+    # Give every row a stable string key for Choropleth binding
+    india_gdf = india_gdf.reset_index(drop=True)
+    india_gdf['_id'] = india_gdf.index.astype(str)
+
+    # ── Choropleth layer (handles data binding reliably) ─────────────
+    folium.Choropleth(
+    geo_data=india_gdf,
+    name='District Shading',
+    data=india_gdf,
+    columns=[india_gdf.index, 'incident_count'],
+    key_on='feature.id',   # 👈 important
+    fill_color='YlOrRd',
+    fill_opacity=0.65,
+    line_opacity=0.3,
+    nan_fill_color='#f5efe3',
+    legend_name='Mining Incidents per District',
+).add_to(m)
+
+    # ── Invisible GeoJson overlay just for hover tooltips ─────────────
+    tooltip_fields, tooltip_aliases = [], []
     if dist_field:
         tooltip_fields.append(dist_field);  tooltip_aliases.append('District:')
     if state_field:
         tooltip_fields.append(state_field); tooltip_aliases.append('State:')
-    # tooltip_fields.append('incident_count'); tooltip_aliases.append('Mining incidents:')
-
-    max_count = max(india_gdf['incident_count'].max(), 1)
-
-    def style_fn(feature):
-        count = feature['properties'].get('incident_count', 0)
-        opacity = 0.05 + 0.60 * (count / max_count)
-        return {
-            'fillColor':   '#c0392b' if count > 0 else '#e8a838',
-            'color':       '#5a4e3c',
-            'weight':      0.6,
-            'fillOpacity': opacity,
-        }
-
-    def highlight_fn(feature):
-        return {'fillColor': '#922b21', 'color': '#1c1a17', 'weight': 2, 'fillOpacity': 0.75}
+    # tooltip_fields.append('incident_count'); tooltip_aliases.append('Incidents:')
 
     folium.GeoJson(
         india_gdf,
-        name='Districts',
-        style_function=style_fn,
-        highlight_function=highlight_fn,
+        name='District Tooltips',
+        style_function=lambda _: {
+            'fillColor': 'transparent', 'color': 'transparent',
+            'weight': 0, 'fillOpacity': 0,
+        },
+        highlight_function=lambda _: {
+            'fillColor': '#922b21', 'color': '#1c1a17',
+            'weight': 2, 'fillOpacity': 0.25,
+        },
         tooltip=folium.GeoJsonTooltip(
             fields=tooltip_fields,
             aliases=tooltip_aliases,
-            localize=True,
-            sticky=True,
-            labels=True,
+            localize=True, sticky=True, labels=True,
             style=(
                 "background-color: #1c1a17; color: #e8dcc8; "
                 "font-family: 'Source Sans 3', sans-serif; "
@@ -485,7 +603,7 @@ India district polygons<br>
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        m = create_map(mining_df, india_gdf, mining_obs_df)
+        m = create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf)
         st_folium(m, width="100%", height=580, returned_objects=[])
 
     with tab2:
