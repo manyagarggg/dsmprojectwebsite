@@ -296,18 +296,20 @@ def build_state_color_counts(mining_df, india_gdf):
     )
 
     return india_gdf
-
 def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     india_gdf = india_gdf.copy()
-    india_gdf['incident_count'] = 0
 
-    dist_field  = next((c for c in ['district', 'DISTRICT', 'dtname', 'NAME_2'] if c in india_gdf.columns), None)
-    state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
+    dist_field = next((c for c in ['district', 'DISTRICT', 'dtname', 'NAME_2'] if c in india_gdf.columns), None)
 
-    total_counts = pd.Series(dtype=int)
+    # master dictionary: district → count
+    district_counts = {}
+
+    def add_counts(series):
+        for k, v in series.items():
+            district_counts[k] = district_counts.get(k, 0) + int(v)
 
     # ─────────────────────────────
-    # 1. MINING DF (lat/lon → spatial)
+    # 1. mining_df (spatial → district)
     # ─────────────────────────────
     try:
         pts = gpd.GeoDataFrame(
@@ -317,16 +319,23 @@ def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india
         )
 
         gdf = india_gdf.to_crs('EPSG:4326')
-        joined = gpd.sjoin(pts, gdf[['geometry']], how='left', predicate='within')
 
-        spatial_counts = joined['index_right'].value_counts()
-        total_counts = total_counts.add(spatial_counts, fill_value=0)
+        joined = gpd.sjoin(pts, gdf[[dist_field, 'geometry']], how='left', predicate='within')
+
+        mining_counts = (
+            joined[dist_field]
+            .dropna()
+            .str.strip().str.lower()
+            .value_counts()
+        )
+
+        add_counts(mining_counts)
 
     except Exception:
         pass
 
     # ─────────────────────────────
-    # 2. NEWS DF (district-based)
+    # 2. news_df
     # ─────────────────────────────
     if 'District' in news_df.columns:
         news_counts = (
@@ -335,18 +344,10 @@ def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india
             .str.strip().str.lower()
             .value_counts()
         )
-
-        mapped = (
-            india_gdf[dist_field]
-            .str.strip().str.lower()
-            .map(news_counts)
-            .fillna(0)
-        )
-
-        total_counts = total_counts.add(mapped, fill_value=0)
+        add_counts(news_counts)
 
     # ─────────────────────────────
-    # 3. COURT DF (district-based)
+    # 3. court_df
     # ─────────────────────────────
     if 'District' in court_df.columns:
         court_counts = (
@@ -355,18 +356,10 @@ def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india
             .str.strip().str.lower()
             .value_counts()
         )
-
-        mapped = (
-            india_gdf[dist_field]
-            .str.strip().str.lower()
-            .map(court_counts)
-            .fillna(0)
-        )
-
-        total_counts = total_counts.add(mapped, fill_value=0)
+        add_counts(court_counts)
 
     # ─────────────────────────────
-    # 4. MINING OBS (lat/lon → spatial)
+    # 4. mining_obs_df (spatial)
     # ─────────────────────────────
     try:
         pts_obs = gpd.GeoDataFrame(
@@ -375,25 +368,32 @@ def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india
             crs='EPSG:4326'
         )
 
-        gdf = india_gdf.to_crs('EPSG:4326')
-        joined_obs = gpd.sjoin(pts_obs, gdf[['geometry']], how='left', predicate='within')
+        joined_obs = gpd.sjoin(pts_obs, gdf[[dist_field, 'geometry']], how='left', predicate='within')
 
-        obs_counts = joined_obs['index_right'].value_counts()
-        total_counts = total_counts.add(obs_counts, fill_value=0)
+        obs_counts = (
+            joined_obs[dist_field]
+            .dropna()
+            .str.strip().str.lower()
+            .value_counts()
+        )
+
+        add_counts(obs_counts)
 
     except Exception:
         pass
 
-    # Apply counts
+    # ─────────────────────────────
+    # FINAL MAP BACK TO GEOJSON
+    # ─────────────────────────────
     india_gdf['incident_count'] = (
-        india_gdf.index.map(total_counts)
+        india_gdf[dist_field]
+        .str.strip().str.lower()
+        .map(district_counts)
         .fillna(0)
         .astype(int)
     )
 
     return india_gdf
-
-
 # +
 # Map builder
 # +
