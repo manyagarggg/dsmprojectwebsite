@@ -498,7 +498,7 @@ India district polygons<br>
 
         st.markdown("### Correlation Heatmap of Indicators")
         try:
-            st.image("outputs/correlation_heatmap_indicators.png", use_column_width=True)
+            st.image("outputs/correlation_heatmap_indicators.png", width="stretch")
         except Exception:
             st.info("📂 Image not found: outputs/correlation_heatmap_indicators.png")
 
@@ -557,7 +557,7 @@ India district polygons<br>
                 if path.endswith('.html'):
                     st.components.v1.html(open(path).read(), height=420)
                 else:
-                    st.image(path, use_column_width=True)
+                    st.image(path, width="stretch")
             except Exception:
                 st.info(f"📂 File not found: {path}")
             col_a, col_b, col_c = st.columns(3)
