@@ -1,0 +1,35 @@
+SPATIAL ANALYSIS SUMMARY
+================================================================================
+
+Generated: 2026-04-26 20:57:27.492896
+
+DATASET STATISTICS:
+  Crime Records: 4,916 across 54 cities
+  Household Data: 216 records
+  Mining Observations: 375
+  Court Documents: 91
+  States/Territories Analyzed: 36
+
+TOP CRIME HOTSPOTS:
+  Kochi: 11860
+  Indore: 9623
+  Jaipur: 8726
+  Bhopal: 8039
+  Gwalior: 7226
+  Patna: 7127
+  Vijayawada: 7092
+  Jabalpur: 6591
+  Delhi: 6248
+  Kollam: 6124
+
+MINING ACTIVITY HOTSPOTS:
+  Bihar: 193
+  Uttar Pradesh: 48
+  West Bengal: 48
+  Madhya Pradesh: 43
+  Karnataka: 18
+  Rajasthan: 8
+  Maharashtra: 6
+  Gujarat: 3
+  Jharkhand: 3
+  Odisha: 3
