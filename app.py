@@ -48,7 +48,7 @@ st.markdown("""
         gap: 2px;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: #2e2b26;
+        background-color: #ffffff;
         color: #9a8c78;
         border-radius: 6px 6px 0 0;
         font-family: 'Source Sans 3', sans-serif;
@@ -471,11 +471,11 @@ India district polygons<br>
     )
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3 = st.tabs(["Map View", "Visual Gallery", "Findings"])
+    tab1, tab2, tab3 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining"])
 
     with tab1:
         st.markdown(
-            "<h1>Illegal Sand Mining — Interactive Map</h1>"
+            "<h1>Illegal Sand Mining Interactive Map</h1>"
             "<p style='color:#7a6e5e; margin-top:-0.5rem; font-size:1.05rem;'>"
             "Hover over any district to see its recorded incident count. "
             "Click clusters to expand individual markers.</p>",
@@ -500,7 +500,7 @@ India district polygons<br>
         try:
             st.image("outputs/correlation_heatmap_indicators.png", width="stretch")
         except Exception:
-            st.info("📂 Image not found: outputs/correlation_heatmap_indicators.png")
+            st.info("Image not found: outputs/correlation_heatmap_indicators.png")
 
         st.markdown("""
 **What it shows:** Correlations between mining, construction, and socioeconomic indicators.
