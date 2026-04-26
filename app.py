@@ -134,9 +134,7 @@ def show_loading_page():
     st.success("✅ Data loaded successfully.")
 
 
-# ------------------------------------------------------------------
 # Geometry parsing — handles WKT, raw "lat,lon", and GeoJSON strings
-# ------------------------------------------------------------------
 def parse_geom_to_latlon(geom_val):
     """
     Try every known format for the geom column and return (lat, lon) or (nan, nan).
@@ -183,9 +181,7 @@ def parse_geom_to_latlon(geom_val):
     return np.nan, np.nan
 
 
-# ------------------------------------------------------------------
 # Data loading
-# ------------------------------------------------------------------
 @st.cache_data
 def load_data():
     mining_df = pd.read_csv("data/final_unified_geo_data_rows.csv")
@@ -224,9 +220,8 @@ def load_data():
     return mining_df, india_gdf, court_df, news_df, mining_obs_df
 
 
-# ------------------------------------------------------------------
 # Incident count per district — spatial join with name-match fallback
-# ------------------------------------------------------------------
+# +
 def build_incident_counts(mining_df, india_gdf):
     india_gdf = india_gdf.copy()
     india_gdf['incident_count'] = 0
@@ -290,9 +285,9 @@ def build_incident_counts(mining_df, india_gdf):
     return india_gdf
 
 
-# ------------------------------------------------------------------
+# +
 # Map builder
-# ------------------------------------------------------------------
+# +
 def create_map(mining_df, india_gdf, mining_obs_df):
 
     m = folium.Map(location=[22.5, 78.9], zoom_start=5,
@@ -390,9 +385,9 @@ def create_map(mining_df, india_gdf, mining_obs_df):
     return m
 
 
-# ------------------------------------------------------------------
+# +
 # Main
-# ------------------------------------------------------------------
+# +
 def main():
     if 'loaded' not in st.session_state:
         show_loading_page()
@@ -507,7 +502,7 @@ India district polygons<br>
 
 **How to read:** Red = positive correlation, blue = negative. Stronger colour = stronger relationship.
 
-**Key finding:** Mining incidents correlate strongly with PMAY construction scale, but weakly with poverty or literacy rates — illegal mining is demand-driven, not desperation-driven.
+**Key finding:** Mining incidents correlate strongly with PMAY construction scale, but weakly with poverty or literacy rates, illegal mining is demand-driven, not desperation-driven.
         """)
 
         st.divider()
@@ -532,7 +527,7 @@ India district polygons<br>
             ("Temporal Surge in Mining",         "sangam_ganga_figures/fig_temporal_surge.png",
              "Annual illegal mining incidents 2010–2025, split pre/post-PMAY.",
              "Blue = pre-2015 baseline, red = post-launch surge.",
-             "Mining rose from 13/year pre-2015 to 191/year post-2015 — a 14.7× increase."),
+             "Mining rose from 13/year pre-2015 to 191/year post-2015, a 14.7× increase."),
             ("Event Study: PMAY Impact",         "sangam_ganga_figures/fig_event_study.png",
              "DiD coefficients showing effect of high-PMAY states over time.",
              "Dots above zero post-2015 = significant mining increase after PMAY launch.",
@@ -547,7 +542,7 @@ India district polygons<br>
              "Mining correlates with riverbed disturbance and water degradation."),
             ("Spatial Clusters: Construction vs Mining", "sangam_ganga_figures/fig_spatial_clusters.png",
              "Side-by-side: PMAY allocation vs mining incidents by state.",
-             "Visual decoupling — mining and construction occur in different states.",
+             "Visual decoupling, mining and construction occur in different states.",
              "Supply and demand are spatially separated across state borders."),
         ]
 
@@ -573,7 +568,7 @@ India district polygons<br>
 
 This study analysed illegal sand mining in India using spatial statistics, causal inference, and environmental monitoring.
 The central finding: the 2015 PMAY-U housing scheme caused a **14.7× surge** in illegal mining, with extraction spatially
-decoupled from construction demand — occurring primarily in economically vulnerable supply states.
+decoupled from construction demand, occurring primarily in economically vulnerable supply states.
 
 ---
 
@@ -587,7 +582,7 @@ decoupled from construction demand — occurring primarily in economically vulne
 
 ### 2. Spatial Patterns & Hotspots
 - **Top states:** Bihar (193 incidents), Uttar Pradesh (48), West Bengal (48), Madhya Pradesh (43)
-- **Spatial decoupling:** Bivariate Moran's I = 0.033 (p = 0.42) — no co-clustering with construction
+- **Spatial decoupling:** Bivariate Moran's I = 0.033 (p = 0.42), no co-clustering with construction
 - **KDE analysis:** Hotspots concentrated in the Gangetic plain and central India
 - **LISA:** Significant local spatial autocorrelation in mining clusters
 
@@ -598,7 +593,7 @@ decoupled from construction demand — occurring primarily in economically vulne
 
 ### 4. Economic & Social Dimensions
 - Crime hotspots spatially coincide with mining areas
-- Poverty and literacy have weak direct effects; construction demand — not desperation — drives mining
+- Poverty and literacy have weak direct effects; construction demand, not desperation, drives mining
 - Urbanisation shows no significant independent effect
 
 ### 5. Methodological Approach
@@ -626,7 +621,7 @@ decoupled from construction demand — occurring primarily in economically vulne
 
 **Immediate actions:**
 1. Develop legal sand mining infrastructure in high-demand states to reduce illegal supply pressure
-2. Focus enforcement on Bihar, UP, and MP — the primary sand mafia hotspots
+2. Focus enforcement on Bihar, UP, and MP, the primary sand mafia hotspots
 3. Implement real-time river quality monitoring at active mining sites
 4. Invest in economic alternatives for communities dependent on informal extraction
 
@@ -641,7 +636,7 @@ decoupled from construction demand — occurring primarily in economically vulne
 ## Limitations & Future Research
 
 - District-level analysis would reveal finer spatial patterns
-- Pre-2015 mining data is sparse — a longer time series would sharpen causal estimates
+- Pre-2015 mining data is sparse, a longer time series would sharpen causal estimates
 - Sand mafia economics and enforcement failures warrant dedicated ethnographic research
 - Experimental evaluation of alternative sand supply interventions is needed
 
