@@ -1288,7 +1288,7 @@ The most actionable implications are:
         st.markdown("<h1>Blog: Report Narrative</h1>", unsafe_allow_html=True)
         st.markdown(
             "<p style='color:#5a4e3c; font-size:1rem; margin-top:-0.5rem;'>"
-            "The following narrative is drawn directly from report.pdf. The text is presented in a readable blog-style format while preserving the report’s own wording."
+            "More narrative details on the high level thematic problem. 1/2 of the blog! Access 2/2 on the Research Narrative tab"
             "</p>",
             unsafe_allow_html=True
         )
@@ -1400,15 +1400,6 @@ The most actionable implications are:
         st.markdown(
             "To move closer to a causal claim, we implement a Difference-in-Differences design. This method compares the change in outcomes before and after a policy intervention in a “treated” group (states with high PMAY-U allocations) against the change in a “control” group (states with low allocations), under the assumption that both groups would have followed parallel trends in the absence of the program. Treatment is defined as being above the median in PMAY houses sanctioned per state. The estimated DiD coefficient is ˆβ= +1.057 (p <0.001, 95% CI: [0.855, 1.259]), implying that high-PMAY states experienced 187.7% more mining post-2015 than low-PMAY states, relative to their pre-2015 difference. An event study design shows no significant pre-2015 differential trends between treated and control states (F= 0.406, p= 0.805), supporting the parallel trends assumption."
         )
-
-        st.markdown("## Original PDF")
-        try:
-            st.components.v1.html(
-                '<iframe src="report.pdf" width="100%" height="800"></iframe>',
-                height=820
-            )
-        except Exception:
-            st.info("Unable to embed the PDF preview. Please open report.pdf directly.")
 
 if __name__ == "__main__":
     main()
