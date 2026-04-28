@@ -9,6 +9,10 @@ from streamlit_folium import st_folium
 import time
 import random
 import re
+import base64
+import html
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 from shapely import wkt
 from shapely.geometry import Point
 
@@ -218,6 +222,78 @@ def load_data():
     mining_obs_df = mining_obs_df.dropna(subset=['latitude', 'longitude'])
 
     return mining_df, india_gdf, court_df, news_df, mining_obs_df
+
+
+URL_PATTERN = re.compile(r'https?://[^\s"\'<>]+')
+IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif'}
+LOCAL_MEDIA_DIR = Path('rough_manya/mining_pictures')
+
+
+def extract_urls(value):
+    if value is None:
+        return []
+
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+
+    if isinstance(value, (list, tuple, set)):
+        values = [str(v) for v in value if v is not None and not pd.isna(v)]
+    else:
+        if pd.isna(value):
+            return []
+        values = [str(value)]
+
+    urls = []
+    for text in values:
+        urls.extend(URL_PATTERN.findall(text))
+    return [u.strip() for u in urls if u.strip()]
+
+
+def render_media_html(value):
+    urls = extract_urls(value)
+    if not urls:
+        return ''
+
+    html_parts = []
+    preview_added = False
+    for url in urls:
+        try:
+            parsed = urlparse(url)
+            filename = Path(unquote(parsed.path)).name
+        except Exception:
+            filename = Path(url).name
+
+        local_file = LOCAL_MEDIA_DIR / filename
+        ext = local_file.suffix.lower() if local_file.exists() else Path(filename).suffix.lower()
+        is_image = ext in IMAGE_EXTS
+
+        if local_file.exists() and local_file.is_file() and is_image:
+            if not preview_added:
+                try:
+                    image_bytes = local_file.read_bytes()
+                    mime_type = 'image/jpeg' if ext != '.png' else 'image/png'
+                    html_parts.append(
+                        f"<a href='{url}' target='_blank'>"
+                        f"<img src='data:{mime_type};base64,{base64.b64encode(image_bytes).decode()}' "
+                        "style='max-width:260px; max-height:180px; display:block; margin-top:8px; border-radius:4px;'/>"
+                        "</a>"
+                    )
+                    preview_added = True
+                except Exception:
+                    html_parts.append(f"<div><a href='{url}' target='_blank'>Photo: {filename}</a></div>")
+            else:
+                html_parts.append(f"<div><a href='{url}' target='_blank'>Photo: {filename}</a></div>")
+        elif is_image:
+            html_parts.append(
+                f"<a href='{url}' target='_blank'>"
+                f"<img src='{url}' style='max-width:260px; max-height:180px; display:block; margin-top:8px; border-radius:4px;'/>"
+                "</a>"
+            )
+            preview_added = True
+        else:
+            html_parts.append(f"<div style='margin-top:6px;'><a href='{url}' target='_blank'>Link: {html.escape(filename)}</a></div>")
+
+    return ''.join(html_parts)
 
 
 @st.cache_data
@@ -465,7 +541,7 @@ def resolve_feature_coordinates(row, district_centroids, state_centroids):
     return None, None
 
 
-def aggregate_records_to_centroids(df, district_col, state_col, district_centroids, state_centroids):
+def aggregate_records_to_centroids(df, district_col, state_col, district_centroids, state_centroids, url_cols=None):
     if df is None or len(df) == 0:
         return []
 
@@ -473,20 +549,16 @@ def aggregate_records_to_centroids(df, district_col, state_col, district_centroi
     if not group_cols:
         return []
 
-    grouped = (
-        df.assign(**{
-            c: df[c].astype(str).str.strip()
-            for c in group_cols
-        })
-        .groupby(group_cols, dropna=False, as_index=False)
-        .size()
-        .rename(columns={'size': 'count'})
-    )
+    grouped = df.assign(**{
+        c: df[c].astype(str).str.strip()
+        for c in group_cols
+    }).groupby(group_cols, dropna=False)
 
     markers = []
-    for _, row in grouped.iterrows():
-        district = normalize_text(row.get(district_col)) if district_col in row else None
-        state = normalize_text(row.get(state_col)) if state_col in row else None
+    for key, group in grouped:
+        row_values = dict(zip(group_cols, key)) if isinstance(key, tuple) else {group_cols[0]: key}
+        district = normalize_text(row_values.get(district_col)) if district_col in row_values else None
+        state = normalize_text(row_values.get(state_col)) if state_col in row_values else None
 
         latlon = None
         if district and district in district_centroids:
@@ -497,12 +569,23 @@ def aggregate_records_to_centroids(df, district_col, state_col, district_centroi
         if not latlon:
             continue
 
+        urls = []
+        if url_cols:
+            for col in url_cols:
+                if col in group.columns:
+                    for text in group[col].dropna().astype(str).tolist():
+                        urls.extend(extract_urls(text))
+            urls = sorted(set(urls))
+            # Filter out invalid URLs containing 'undefined'
+            urls = [u for u in urls if 'undefined' not in u]
+
         markers.append({
             'lat': latlon[0],
             'lon': latlon[1],
-            'count': int(row['count']),
-            'district': row.get(district_col, ''),
-            'state': row.get(state_col, ''),
+            'count': int(len(group)),
+            'district': row_values.get(district_col, ''),
+            'state': row_values.get(state_col, ''),
+            'urls': urls,
         })
 
     return markers
@@ -578,19 +661,28 @@ def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     if mining_obs_df is not None and len(mining_obs_df) > 0:
         cluster_obs = MarkerCluster(name='Mining Observations').add_to(m)
         for _, row in mining_obs_df.iterrows():
-            title = row.get('Title', row.get('title', 'Mining Observation'))
-            desc  = row.get('Description', row.get('description', ''))
+            title = html.escape(str(row.get('Title', row.get('title', 'Mining Observation'))))
+            desc  = str(row.get('Notes from the location', row.get('description', '')))
+            desc_html = html.escape(desc).replace('\n', '<br>') if desc else ''
+            media_html = render_media_html(row.get('Pictures'))
+            if not media_html:
+                media_html = render_media_html(row.get('PDF'))
+            desc_block = f"<br><div style='margin-top:6px; color:#555; font-size:12px;'>{desc_html}</div>" if desc_html else ''
             popup_html = (
-                f"<div style='font-family:sans-serif; min-width:160px;'>"
+                f"<div style='font-family:sans-serif; min-width:220px;'>"
                 f"<b style='color:#c98a1a;'>⚠ Mining Obs</b><br>"
                 f"<span style='font-size:13px;'>{title}</span>"
-                f"{'<br><small>' + str(desc)[:120] + '…</small>' if desc else ''}"
+                f"{desc_block}"
+                f"{media_html}"
                 f"</div>"
             )
+            tooltip_text = str(title)[:60]
+            if media_html:
+                tooltip_text += ' 📷'
             folium.Marker(
                 location=[row['latitude'], row['longitude']],
-                popup=folium.Popup(popup_html, max_width=260),
-                tooltip=str(title)[:60],
+                popup=folium.Popup(popup_html, max_width=450),
+                tooltip=tooltip_text,
                 icon=folium.Icon(color='orange', icon='exclamation-sign', prefix='glyphicon'),
             ).add_to(cluster_obs)
 
@@ -598,18 +690,19 @@ def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     if len(mining_df) > 0:
         cluster_unified = MarkerCluster(name='Verified Incidents').add_to(m)
         for _, row in mining_df.iterrows():
-            desc  = str(row.get('description', row.get('raw_location', 'N/A')))[:120]
+            desc  = str(row.get('description', row.get('raw_location', 'N/A')))
+            desc_html = html.escape(desc).replace('\n', '<br>')
             state = row.get('state', '')
             popup_html = (
-                f"<div style='font-family:sans-serif; min-width:160px;'>"
+                f"<div style='font-family:sans-serif; min-width:220px;'>"
                 f"<b style='color:#c0392b;'>🔴 Mining Incident</b><br>"
-                f"{'<small>📍 ' + str(state) + '</small><br>' if state else ''}"
-                f"<small>{desc}…</small>"
+                f"{'<small>📍 ' + html.escape(str(state)) + '</small><br>' if state else ''}"
+                f"<div style='margin-top:6px; color:#555; font-size:12px;'>{desc_html}</div>"
                 f"</div>"
             )
             folium.Marker(
                 location=[row['latitude'], row['longitude']],
-                popup=folium.Popup(popup_html, max_width=260),
+                popup=folium.Popup(popup_html, max_width=450),
                 tooltip=str(row.get('district', row.get('state', 'Incident')))[:60],
                 icon=folium.Icon(color='red', icon='map-marker', prefix='glyphicon'),
             ).add_to(cluster_unified)
@@ -618,21 +711,24 @@ def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     if len(news_df) > 0:
         cluster_news = MarkerCluster(name='News Reports').add_to(m)
         news_markers = aggregate_records_to_centroids(
-            news_df, 'District', 'States', district_centroids, state_centroids
+            news_df, 'District', 'States', district_centroids, state_centroids,
+            url_cols=['PDF']
         )
         for marker in news_markers:
             title = f"News reports: {marker['count']}"
+            media_html = render_media_html(marker.get('urls'))
             popup_html = (
-                f"<div style='font-family:sans-serif; min-width:180px;'>"
+                f"<div style='font-family:sans-serif; min-width:220px;'>"
                 f"<b style='color:#2978b5;'>📰 News Report</b><br>"
                 f"<small>{marker['count']} item(s) in {marker['district'] or marker['state']}</small><br>"
-                f"{'<small>📍 ' + str(marker['district']) + '</small><br>' if marker['district'] else ''}"
-                f"{'<small>' + str(marker['state']) + '</small><br>' if marker['state'] else ''}"
+                f"{'<small>📍 ' + html.escape(str(marker['district'])) + '</small><br>' if marker['district'] else ''}"
+                f"{'<small>' + html.escape(str(marker['state'])) + '</small><br>' if marker['state'] else ''}"
+                f"{media_html}"
                 f"</div>"
             )
             folium.Marker(
                 location=[marker['lat'], marker['lon']],
-                popup=folium.Popup(popup_html, max_width=260),
+                popup=folium.Popup(popup_html, max_width=450),
                 tooltip=title,
                 icon=folium.Icon(color='blue', icon='info-sign', prefix='glyphicon'),
             ).add_to(cluster_news)
@@ -641,21 +737,24 @@ def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     if len(court_df) > 0:
         cluster_court = MarkerCluster(name='Court Reports').add_to(m)
         court_markers = aggregate_records_to_centroids(
-            court_df, 'District', 'State', district_centroids, state_centroids
+            court_df, 'District', 'State', district_centroids, state_centroids,
+            url_cols=['PDF']
         )
         for marker in court_markers:
             title = f"Court reports: {marker['count']}"
+            media_html = render_media_html(marker.get('urls'))
             popup_html = (
-                f"<div style='font-family:sans-serif; min-width:180px;'>"
+                f"<div style='font-family:sans-serif; min-width:220px;'>"
                 f"<b style='color:#238636;'>⚖ Court Report</b><br>"
                 f"<small>{marker['count']} item(s) in {marker['district'] or marker['state']}</small><br>"
-                f"{'<small>📍 ' + str(marker['district']) + '</small><br>' if marker['district'] else ''}"
-                f"{'<small>' + str(marker['state']) + '</small><br>' if marker['state'] else ''}"
+                f"{'<small>📍 ' + html.escape(str(marker['district'])) + '</small><br>' if marker['district'] else ''}"
+                f"{'<small>' + html.escape(str(marker['state'])) + '</small><br>' if marker['state'] else ''}"
+                f"{media_html}"
                 f"</div>"
             )
             folium.Marker(
                 location=[marker['lat'], marker['lon']],
-                popup=folium.Popup(popup_html, max_width=260),
+                popup=folium.Popup(popup_html, max_width=450),
                 tooltip=title,
                 icon=folium.Icon(color='green', icon='ok-sign', prefix='glyphicon'),
             ).add_to(cluster_court)
