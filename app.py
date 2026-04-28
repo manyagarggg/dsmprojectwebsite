@@ -220,6 +220,21 @@ def load_data():
     return mining_df, india_gdf, court_df, news_df, mining_obs_df
 
 
+@st.cache_data
+def load_report_text():
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError:
+        return "PyPDF2 is not installed. Install it to view report text."
+
+    reader = PdfReader('report.pdf')
+    pages = []
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text() or ''
+        pages.append(f"--- PAGE {i+1} ---\n{text}")
+    return "\n\n".join(pages)
+
+
 # Incident count per district — spatial join with name-match fallback
 # +
 def build_state_counts(mining_df, india_gdf):
@@ -394,6 +409,104 @@ def build_incident_counts_all(mining_df, news_df, court_df, mining_obs_df, india
     )
 
     return india_gdf
+
+
+def normalize_text(value):
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    return text.lower() if text else None
+
+
+def build_centroid_maps(india_gdf):
+    dist_field = next((c for c in ['district', 'DISTRICT', 'dtname', 'NAME_2'] if c in india_gdf.columns), None)
+    state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
+
+    district_centroids = {}
+    if dist_field is not None:
+        for _, row in india_gdf.dropna(subset=[dist_field]).iterrows():
+            name = normalize_text(row[dist_field])
+            if name and hasattr(row.geometry, 'centroid') and not row.geometry.is_empty:
+                centroid = row.geometry.centroid
+                district_centroids[name] = (centroid.y, centroid.x)
+
+    state_centroids = {}
+    if state_field is not None:
+        try:
+            state_gdf = india_gdf[[state_field, 'geometry']].dissolve(by=state_field)
+            for state_name, row in state_gdf.iterrows():
+                name = normalize_text(state_name)
+                if name and hasattr(row.geometry, 'centroid') and not row.geometry.is_empty:
+                    centroid = row.geometry.centroid
+                    state_centroids[name] = (centroid.y, centroid.x)
+        except Exception:
+            pass
+
+    return district_centroids, state_centroids
+
+
+def resolve_feature_coordinates(row, district_centroids, state_centroids):
+    lat = row.get('latitude') if 'latitude' in row else None
+    lon = row.get('longitude') if 'longitude' in row else None
+    if pd.notna(lat) and pd.notna(lon):
+        try:
+            return float(lat), float(lon)
+        except Exception:
+            pass
+
+    district = normalize_text(row.get('District') or row.get('district') or row.get('Sub district / Tehsil'))
+    if district and district in district_centroids:
+        return district_centroids[district]
+
+    state = normalize_text(row.get('State') or row.get('States'))
+    if state and state in state_centroids:
+        return state_centroids[state]
+
+    return None, None
+
+
+def aggregate_records_to_centroids(df, district_col, state_col, district_centroids, state_centroids):
+    if df is None or len(df) == 0:
+        return []
+
+    group_cols = [c for c in [district_col, state_col] if c in df.columns]
+    if not group_cols:
+        return []
+
+    grouped = (
+        df.assign(**{
+            c: df[c].astype(str).str.strip()
+            for c in group_cols
+        })
+        .groupby(group_cols, dropna=False, as_index=False)
+        .size()
+        .rename(columns={'size': 'count'})
+    )
+
+    markers = []
+    for _, row in grouped.iterrows():
+        district = normalize_text(row.get(district_col)) if district_col in row else None
+        state = normalize_text(row.get(state_col)) if state_col in row else None
+
+        latlon = None
+        if district and district in district_centroids:
+            latlon = district_centroids[district]
+        elif state and state in state_centroids:
+            latlon = state_centroids[state]
+
+        if not latlon:
+            continue
+
+        markers.append({
+            'lat': latlon[0],
+            'lon': latlon[1],
+            'count': int(row['count']),
+            'district': row.get(district_col, ''),
+            'state': row.get(state_col, ''),
+        })
+
+    return markers
+
 # +
 # Map builder
 # +
@@ -406,6 +519,8 @@ def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
     india_gdf = build_incident_counts_all(
     mining_df, news_df, court_df, mining_obs_df, india_gdf)
     india_gdf = build_state_color_counts(mining_df, india_gdf)
+
+    district_centroids, state_centroids = build_centroid_maps(india_gdf)
 
     dist_field  = next((c for c in ['district', 'DISTRICT', 'dtname', 'NAME_2'] if c in india_gdf.columns), None)
     state_field = next((c for c in ['state', 'STATE', 'NAME_1'] if c in india_gdf.columns), None)
@@ -499,6 +614,52 @@ def create_map(mining_df, news_df, court_df, mining_obs_df, india_gdf):
                 icon=folium.Icon(color='red', icon='map-marker', prefix='glyphicon'),
             ).add_to(cluster_unified)
 
+    # News report group markers by location to avoid hundreds of overlapping centroid points
+    if len(news_df) > 0:
+        cluster_news = MarkerCluster(name='News Reports').add_to(m)
+        news_markers = aggregate_records_to_centroids(
+            news_df, 'District', 'States', district_centroids, state_centroids
+        )
+        for marker in news_markers:
+            title = f"News reports: {marker['count']}"
+            popup_html = (
+                f"<div style='font-family:sans-serif; min-width:180px;'>"
+                f"<b style='color:#2978b5;'>📰 News Report</b><br>"
+                f"<small>{marker['count']} item(s) in {marker['district'] or marker['state']}</small><br>"
+                f"{'<small>📍 ' + str(marker['district']) + '</small><br>' if marker['district'] else ''}"
+                f"{'<small>' + str(marker['state']) + '</small><br>' if marker['state'] else ''}"
+                f"</div>"
+            )
+            folium.Marker(
+                location=[marker['lat'], marker['lon']],
+                popup=folium.Popup(popup_html, max_width=260),
+                tooltip=title,
+                icon=folium.Icon(color='blue', icon='info-sign', prefix='glyphicon'),
+            ).add_to(cluster_news)
+
+    # Court report group markers by location to avoid hundreds of overlapping centroid points
+    if len(court_df) > 0:
+        cluster_court = MarkerCluster(name='Court Reports').add_to(m)
+        court_markers = aggregate_records_to_centroids(
+            court_df, 'District', 'State', district_centroids, state_centroids
+        )
+        for marker in court_markers:
+            title = f"Court reports: {marker['count']}"
+            popup_html = (
+                f"<div style='font-family:sans-serif; min-width:180px;'>"
+                f"<b style='color:#238636;'>⚖ Court Report</b><br>"
+                f"<small>{marker['count']} item(s) in {marker['district'] or marker['state']}</small><br>"
+                f"{'<small>📍 ' + str(marker['district']) + '</small><br>' if marker['district'] else ''}"
+                f"{'<small>' + str(marker['state']) + '</small><br>' if marker['state'] else ''}"
+                f"</div>"
+            )
+            folium.Marker(
+                location=[marker['lat'], marker['lon']],
+                popup=folium.Popup(popup_html, max_width=260),
+                tooltip=title,
+                icon=folium.Icon(color='green', icon='ok-sign', prefix='glyphicon'),
+            ).add_to(cluster_court)
+
     folium.LayerControl().add_to(m)
     return m
 
@@ -543,6 +704,12 @@ def main():
 <div style='display:flex; align-items:center; gap:10px; margin:5px 0;'>
   <span style='font-size:1rem;'>🟠</span><span>Field observation</span>
 </div>
+<div style='display:flex; align-items:center; gap:10px; margin:5px 0;'>
+  <span style='font-size:1rem;'>🔵</span><span>News report</span>
+</div>
+<div style='display:flex; align-items:center; gap:10px; margin:5px 0;'>
+  <span style='font-size:1rem;'>🟢</span><span>Court report</span>
+</div>
 </div>
 
 </div>
@@ -584,7 +751,7 @@ India district polygons<br>
     )
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining", "Research Narrative"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining", "Research Narrative", "More Details"])
 
     with tab1:
         st.markdown(
@@ -595,10 +762,10 @@ India district polygons<br>
             unsafe_allow_html=True
         )
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total Incidents", "2,212")
+        c2, c3, c4 = st.columns(3)
+        # c1.metric("Total Incidents", "2,212")
         c2.metric("States Affected", "28+")
-        c3.metric("Top State", "Bihar · 193")
+        c3.metric("Top State", "Bihar")
         c4.metric("Post-PMAY Surge", "14.7×")
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -783,6 +950,87 @@ decoupled from construction demand, occurring primarily in economically vulnerab
 - IPC crime intensity and urban crime rates
 - Ganga and Sangam water sensor time series
 - State and district geography from India shapefiles
+- `classification.ipynb` for model-based classification of mining exposure, signal validation, and systematic risk scoring
+""")
+
+        st.markdown("## How the evidence was built")
+        st.markdown("""
+We built this blog from a hybrid research architecture: structured mining and socioeconomic data were stored in a unified relational schema, while spatial boundaries were handled as GeoJSON through GeoPandas. A dedicated normalization pipeline aligned state and district spelling variants across government datasets, India Sand Watch records, and shapefiles so that every merge and spatial join could proceed reliably.
+
+The study combines five analytical modules:
+- Kernel density estimation (KDE) to reveal the two dominant extraction corridors along the Gangetic plains and the Central India plateau.
+- Spatial statistics (Moran’s I, LISA hotspots) to test geographic clustering and identify cross-border mining belts.
+- Regression and causal inference (OLS, spatial models, DiD, IV, synthetic control) to test whether PMAY-U construction demand amplifies illegal mining.
+- Socioeconomic correlation analysis to quantify how poverty, housing quality, marginal employment, and police strength relate to mining intensity.
+- NLP-based field classification and water-quality monitoring to validate the illegal mining signal at the point and in the river.
+""")
+
+        st.markdown("## Key techniques and findings")
+        st.markdown("""
+### Geospatial density and clustering
+We used KDE on 373 geo-coded mining observations with a 0.08-degree bandwidth. The resulting intensity surface exposed two corridors:
+1. The Gangetic Plains: a high-density ribbon along the Ganga and its tributaries in Bihar, eastern Uttar Pradesh, and West Bengal.
+2. The Central India Plateau: a second corridor across Madhya Pradesh and Rajasthan, anchored by the Chambal and Narmada rivers.
+
+A mining-to-monitoring ratio map further showed that northeastern districts have high incident density but low groundwater monitoring station coverage, suggesting likely under-detection.
+
+Global Moran’s I on state-level mining counts was 0.121 with p=0.108, indicating only marginal positive clustering. That same result is important: it means mining is not purely random, but its spatial pattern is less rigid than a classic contagion process.
+
+Local Indicators of Spatial Association (LISA) then identified concrete hotspots. High-High clusters emerged in Goa, Gujarat, Madhya Pradesh, and Rajasthan, forming a geographically contiguous corridor consistent with cross-border sand mafia operations. Low-High and High-Low outliers highlighted states like Chhattisgarh, Jharkhand, and Assam, reflecting local drivers distinct from the main belt.
+""")
+
+        st.markdown("""
+### Spatial regression and water-quality validation
+We began with an OLS baseline relating log-transformed mining intensity to crime rate, PM2.5, and PM10. The model explained only 15.8% of the variance, with PM10 the strongest environmental predictor. Lagrange Multiplier diagnostics did not find strong spatial dependence, so we also estimated Spatial Lag and Spatial Error models; neither improved materially over OLS.
+
+The real insight came from Geographically Weighted Regression (GWR). By allowing coefficients to vary across space, GWR raised explained variance to 54.5% and revealed that groundwater contamination near mining sites is highly local. In Bihar, every monitoring station showed a negative local coefficient on distance to mining, confirming that proximity to extraction corresponds with elevated Total Dissolved Solids.
+
+The river case study used 99,000 one-minute Ganga and Sangam sensor readings. Dry-season conductivity at Prayagraj averaged 478 µS/cm versus 276 µS/cm during monsoon, a 1.73× increase with Cohen’s d=1.78 and p<0.001. This matches the seasonal mining window when river levels fall and sand becomes accessible.
+""")
+
+        st.markdown("""
+### Causal analysis of PMAY demand
+The temporal incident series offers the clearest policy signal. Mining counts rose from an average of 13 incidents per year before 2015 to 191 per year after PMAY-U launched, a 14.7× jump. A Mann-Whitney test confirms that this change is statistically significant.
+
+A Difference-in-Differences design then compares high-PMAY states against low-PMAY states, controlling for state and year fixed effects. The estimated treatment effect is +1.057 in log-mining units (p<0.001), which translates to roughly 188% more mining in high-PMAY states relative to their pre-2015 trend.
+
+To address potential selection bias, we instrument PMAY scale with central government financial assistance. The first stage is strong (F=16.40, p<0.001), and the 2SLS estimate remains positive and large at +0.631, reinforcing the conclusion that construction demand is a real driver.
+
+A synthetic control for Uttar Pradesh provides an additional counterfactual. The actual post-2015 trajectory exceeds the synthetic profile by +0.948 log-mining units, or about 158% excess mining. Together, these causal checks paint a consistent picture: PMAY-U construction demand amplified illegal sand extraction.
+""")
+
+        st.markdown("""
+### Socioeconomic and enforcement signals
+We also traced the social and governance contours of the problem.
+- States with poorer housing quality have higher mining intensity. Among the top mining states, the housing quality index correlates at r=–0.75 with mining.
+- Dilapidated housing rates correlate positively with mining at r=+0.51.
+- Marginal worker share is the strongest socioeconomic predictor, with r=+0.612. This suggests that illegal mining is a labor supply avenue for seasonal and informal workers.
+- Police-to-mining ratios vary dramatically. Madhya Pradesh and Gujarat have 15–45× more mining per officer than Maharashtra, Tamil Nadu, and Andhra Pradesh, pointing to structural enforcement gaps rather than absolute incidence levels.
+
+The overall picture is structural: poverty and poor housing are part of the context, but the data show that government construction demand and weak enforcement are the operational triggers.
+""")
+
+        st.markdown("""
+### NLP classification and illegal mining risk scoring
+`classification.ipynb` is the NLP and machine learning heart of this story. We built a rule-based scoring system for the 375 field observations, combining:
+- operational signals (mentions of JCBs, excavators, pumps, trucks),
+- risk signals (night activity, high-volume extraction, repeated daily operations), and
+- legal signals derived from court documents (explicit references to illegal mining, lack of clearance, lease violations).
+
+The classifier labels 121 observations (32%) as highly likely illegal and 254 (68%) as possibly illegal. The highest absolute counts are in Uttar Pradesh, Madhya Pradesh, West Bengal, and Bihar. The highest proportional risk rates are in Goa and Himachal Pradesh.
+
+A Random Forest site-location classifier reinforces the same geography: ROC-AUC is 0.965, with longitude and latitude far more important than environmental variables. Crime rate ranks third, ahead of PM10 and PM2.5, showing that governance context matters as much as pollutant exposure.
+""")
+
+        st.markdown("""
+### What the report concludes
+The report’s consolidated narrative is that illegal sand mining in India is national in scale but corridor-focused. Two river-based belts account for most confirmed incidents, and the strongest causal evidence links the surge after 2015 to PMAY-U construction demand.
+
+The research also finds that:
+- enforcement failure is structural, not incidental,
+- socioeconomic vulnerability shapes the labor supply,
+- field-level classification and court-document extraction both point to an environmental and legal pattern of illegal extraction, and
+- river water quality metrics validate the mining signal with a strong dry-season contamination cycle.
 """)
 
         st.markdown("## The thesis")
@@ -796,8 +1044,10 @@ Our strongest findings are:
 - Spatial statistics and machine learning both identify the same policy-driven pattern.
 """)
 
-        def render_asset(title, path, caption):
+        def render_asset(title, path, caption, detail=None):
             st.markdown(f"#### {title}")
+            if detail:
+                st.markdown(detail)
             if path.endswith('.html'):
                 try:
                     html_code = open(path, 'r', encoding='utf-8').read()
@@ -806,7 +1056,7 @@ Our strongest findings are:
                     st.info(f"File not found or failed to render: {path}")
             else:
                 try:
-                    st.image(path, use_column_width=True)
+                    st.image(path, width="stretch")
                 except Exception:
                     st.info(f"File not found: {path}")
             st.markdown(f"*{caption}*")
@@ -815,165 +1065,212 @@ Our strongest findings are:
         render_asset(
             "Mining Incident Heatmap",
             "outputs/heatmap_mining_observations.png",
-            "Density of verified mining incidents across India, highlighting river corridors and high-activity districts."
+            "Density of verified mining incidents across India, highlighting river corridors and high-activity districts.",
+            detail="This figure is the first visual anchor of the report: confirmed mining points concentrate along the Ganga and Chambal systems, not evenly across the country. It shows how illegal extraction is geographically focused on river corridors and vulnerable hydrological basins."
         )
         render_asset(
             "State Mining Distribution",
             "outputs/geographic_distribution_bars.png",
-            "The state-level breakdown shows Bihar, UP and MP as the top extraction states, not the states with the biggest PMAY demand."
+            "The state-level breakdown shows Bihar, UP and MP as the top extraction states, not the states with the biggest PMAY demand.",
+            detail="This chart underlines the core spatial mismatch in the report: the states that extract the most sand are not always the same states that receive the largest PMAY housing allocations. This decoupling is a key part of the construction demand story."
         )
         render_asset(
             "Crime Intensity and Mining",
             "outputs/heatmap_crime_intensity.png",
-            "Crime hotspots overlap with mining pressure zones, suggesting intertwined enforcement and social risk dynamics."
+            "Crime hotspots overlap with mining pressure zones, suggesting intertwined enforcement and social risk dynamics.",
+            detail="The report uses crime intensity as a proxy for enforcement environment. When mining clusters overlap with crime hotspots, it suggests that illegal extraction is thriving in jurisdictions with weaker law-and-order capacity."
         )
         render_asset(
             "Housing Stock and Mining Risk",
             "outputs/housing_stacked_bars.png",
-            "Dilapidated housing states appear in the same broad regions as mining, but the driver remains construction policy rather than poverty alone."
+            "Dilapidated housing states appear in the same broad regions as mining, but the driver remains construction policy rather than poverty alone.",
+            detail="This figure shows the structural inequality dimension of the problem: states with poor housing stock are also often the states with elevated mining activity. The report interprets this as evidence that demand for cheap construction material is linked to vulnerable housing markets."
         )
         render_asset(
             "Dilapidated Housing Choropleth",
             "outputs/choropleth_housing_dilapidated.html",
-            "A state-level visualisation of poor housing stock that helps place mining pressure in its policy context."
+            "A state-level visualization of poor housing stock that helps place mining pressure in its policy context.",
+            detail="The choropleth makes it easier to see the geography of housing distress. The report connects these poor housing states to elevated sand demand, but also emphasizes that policy-driven construction funding is the proximate trigger."
         )
 
         st.markdown("## The policy trigger")
         render_asset(
             "Temporal Surge after PMAY",
             "sangam_ganga_figures/fig_temporal_surge.png",
-            "Annual mining incidents before and after the 2015 PMAY launch. The jump to a 14.7× higher rate is the most visible signal in the dataset."
+            "Annual mining incidents before and after the 2015 PMAY launch. The jump to a 14.7× higher rate is the most visible signal in the dataset.",
+            detail="The report uses this figure to anchor the causal narrative. Pre-2015 annual mining averaged 13 incidents; post-2015 it averaged 191. That magnitude of increase is the first strong evidence that a policy-driven demand shock occurred."
         )
         render_asset(
             "Event Study Evidence",
             "sangam_ganga_figures/fig_event_study.png",
-            "Difference-in-differences results showing mining diverging in high-PMAY states after the policy launch."
+            "Difference-in-differences results showing mining diverging in high-PMAY states after the policy launch.",
+            detail="This chart tests the parallel trends assumption and shows that high-PMAY states began to diverge after 2015. The report interprets the flat pre-policy coefficients as evidence that the treatment effect is not driven by prior divergence."
         )
         render_asset(
             "Synthetic Control for UP",
             "sangam_ganga_figures/fig_synthetic_control.png",
-            "Uttar Pradesh mining compared to a synthetic counterfactual, isolating the impact of PMAY."
+            "Uttar Pradesh mining compared to a synthetic counterfactual, isolating the impact of PMAY.",
+            detail="For one of the most heavily affected states, the report builds a synthetic control to ask what UP’s mining trajectory would have looked like without the policy-induced construction surge. The post-2015 gap is interpreted as approximately 158% excess mining."
         )
         render_asset(
             "Construction vs Mining Clusters",
             "sangam_ganga_figures/fig_spatial_clusters.png",
-            "A spatial comparison showing that mining supply states do not always coincide with construction demand states."
+            "A spatial comparison showing that mining supply states do not always coincide with construction demand states.",
+            detail="This figure illustrates the key spatial mismatch. It supports the report’s finding that illegal sand typically comes from supply-side states, while PMAY demand is concentrated elsewhere, creating interstate extraction pressure."
         )
 
         st.markdown("## Spatial statistics and maps")
         render_asset(
             "Moran's I spatial autocorrelation",
             "sangam_ganga_figures/fig_morans_i.png",
-            "Global spatial autocorrelation confirms clustering, but the strongest signal comes from state-level policy pressure."
+            "Global spatial autocorrelation confirms clustering, but the strongest signal comes from state-level policy pressure.",
+            detail="The report describes Moran’s I as only marginally positive (I=0.121, p=0.108), meaning the mining distribution is somewhat clustered but not strongly so. This allows us to focus on specific hotspot clusters rather than broad regional contagion."
         )
         render_asset(
             "LISA hotspot analysis",
             "sangam_ganga_figures/fig_lisa_hotspots.png",
-            "Local indicators of spatial association reveal the precise river-basin clusters that carry the highest mining risk."
+            "Local indicators of spatial association reveal the precise river-basin clusters that carry the highest mining risk.",
+            detail="This map identifies High-High clusters in Goa, Gujarat, Madhya Pradesh, and Rajasthan, forming a contiguous belt along major rivers such as the Chambal. It also flags outliers in Assam, Chhattisgarh, and Jharkhand."
         )
         render_asset(
             "KDE mining density",
             "sangam_ganga_figures/fig_kde_maps.png",
-            "Kernel density estimates of mining points, showing the geographic core of extraction."
+            "Kernel density estimates of mining points, showing the geographic core of extraction.",
+            detail="The KDE surface reveals two distinct concentration corridors: one along the Gangetic plains and a second across Central India. The report uses this as evidence that illegal mining is tied to river systems rather than being evenly distributed."
         )
         render_asset(
             "GWR coefficient patterns",
             "sangam_ganga_figures/fig_gwr_coefficients.png",
-            "Geographically weighted regression reveals where the PMAY-mining relationship is strongest."
+            "Geographically weighted regression reveals where the PMAY-mining relationship is strongest.",
+            detail="GWR allows coefficients to vary in space. The report finds a global R2 of 0.545, much higher than OLS, underscoring that the mining-water relationship is locally heterogeneous. Bihar and West Bengal show the strongest local contamination signals."
         )
         render_asset(
             "Spatial regression diagnostics",
             "sangam_ganga_figures/fig_spatial_regression.png",
-            "Regression results that account for spatial dependence and policy covariates."
+            "Regression results that account for spatial dependence and policy covariates.",
+            detail="This figure complements the spatial models discussion. In the report, Spatial Lag and Spatial Error models do not beat OLS, which supports the conclusion that state-level policy and geography explain most of the pattern."
         )
 
         st.markdown("## Environmental validation")
         render_asset(
             "River conductivity and mining seasonality",
             "sangam_ganga_figures/fig_conductivity_mining_seasonal.png",
-            "Sensor evidence linking conductivity spikes to peak mining months."
+            "Sensor evidence linking conductivity spikes to peak mining months.",
+            detail="The report describes the dry-season conductivity increase at Prayagraj: 478 µS/cm versus 276 µS/cm during monsoon. That 1.73× rise, with a very large effect size and p<0.001, is the strongest environmental signal in the analysis."
         )
         render_asset(
             "Ganga / Sangam cross-sensor time series",
             "sangam_ganga_figures/fig_ganga_sangam_timeseries.png",
-            "Water-quality sensor data confirm that river stress rises during mining season."
+            "Water-quality sensor data confirm that river stress rises during mining season.",
+            detail="Cross-sensor correlation is high for WQI, DO, and temperature, validating the data’s reliability. The report notes that conductivity diverges more because the Sangam sensor captures both the Ganga and Yamuna."
         )
         render_asset(
             "Seasonal river patterns",
             "sangam_ganga_figures/fig_ganga_seasonal.png",
-            "Seasonal decomposition of river measurements shows consistent dry-season stress aligned with mining activity."
+            "Seasonal decomposition of river measurements shows consistent dry-season stress aligned with mining activity.",
+            detail="The seasonal decomposition separates trend, seasonality, and residuals. The report uses this to show that the dry-season conductivity signal is persistent and not just an artefact of short-term fluctuations."
         )
         render_asset(
             "Sensor correlation matrix",
             "sangam_ganga_figures/fig_sensor_correlation.png",
-            "Correlations across sensors that link mining activity with water-quality metrics."
+            "Correlations across sensors that link mining activity with water-quality metrics.",
+            detail="The correlation matrix confirms that the two river sensors are largely consistent, with WQI correlation at 0.891 and DO at 0.973, while conductivity is more variable across sites."
         )
 
         st.markdown("## Machine learning & feature evidence")
         render_asset(
             "Random Forest policy importance",
             "sangam_ganga_figures/fig_random_forest.png",
-            "A model-based assessment showing that PMAY and related policy variables are the top predictors of mining incidence."
+            "A model-based assessment showing that PMAY and related policy variables are the top predictors of mining incidence.",
+            detail="The report presents a Random Forest classifier with ROC-AUC of 0.965 ± 0.014. Longitude and latitude are the strongest predictors, followed by crime rate, PM10, and PM2.5, demonstrating that geography and enforcement context matter most."
         )
         render_asset(
             "Feature importance breakdown",
             "sangam_ganga_figures/fig_rf_importance.png",
-            "Permutation and model importances that reinforce the policy-driven story."
+            "Permutation and model importances that reinforce the policy-driven story.",
+            detail="The feature importance ranking shows that crime rate outranks both air quality measures, suggesting that governance and rule-of-law conditions are as important as environmental stress in determining where illegal mining occurs."
         )
         render_asset(
             "Feature distributions",
             "sangam_ganga_figures/fig_feature_distributions.png",
-            "Distributional patterns of key variables used in the analysis."
+            "Distributional patterns of key variables used in the analysis.",
+            detail="The report uses these distributions to validate that the core predictors are well-behaved and to inspect whether outliers could be driving the machine learning results."
         )
         render_asset(
             "Supplemental spatial diagnostics",
             "spatial_figures/fig_feature_distributions.png",
-            "Additional feature distributions from the spatial diagnostics folder."
+            "Additional feature distributions from the spatial diagnostics folder.",
+            detail="These supplemental plots provide a second look at the variables used in the spatial analysis, reinforcing the robustness of the geographic and policy signals."
         )
         render_asset(
             "Spatial sensitivity checks",
             "spatial_figures/fig_focus_sensitivity.png",
-            "Checks for robustness across spatial bandwidth and model settings."
+            "Checks for robustness across spatial bandwidth and model settings.",
+            detail="The report includes sensitivity analyses to show that the main spatial patterns are not an artifact of a particular bandwidth choice in KDE or a single model specification."
         )
         render_asset(
             "Spatial KDE focus",
             "spatial_figures/fig_focus_kde.png",
-            "A focused KDE layer showing the densest mining clusters."
+            "A focused KDE layer showing the densest mining clusters.",
+            detail="This closer look confirms the two principal extraction corridors and helps distinguish the densest hotspots from the broader riverine belt."
         )
         render_asset(
             "GWR focus results",
             "spatial_figures/fig_focus_gwr.png",
-            "Geographically weighted regression focus results for the strongest mining clusters."
+            "Geographically weighted regression focus results for the strongest mining clusters.",
+            detail="The focused GWR results isolate the strongest local effects and show where the mining-proximity / water-quality relationship is most pronounced."
         )
         render_asset(
             "Spatial regression overview",
             "spatial_figures/fig_spatial_regression.png",
-            "Additional spatial regression diagnostics from the spatial analysis folder."
+            "Additional spatial regression diagnostics from the spatial analysis folder.",
+            detail="These diagnostics support the report’s claim that the data are spatially structured but not so strongly that simple regression is invalid, making the causal and descriptive analysis more reliable."
         )
         render_asset(
             "Spatial Moran analysis",
             "spatial_figures/fig_morans_i.png",
-            "Another view of the global spatial autocorrelation in the mining dataset."
+            "Another view of the global spatial autocorrelation in the mining dataset.",
+            detail="A second Moran’s I view reinforces the main finding: there is positive clustering, but it is not overwhelming, so the hotspot story is focused on specific corridors rather than the whole country."
         )
         render_asset(
             "Spatial LISA hotspots",
             "spatial_figures/fig_lisa_hotspots.png",
-            "Extra local hotspot validation from the spatial figures folder."
+            "Extra local hotspot validation from the spatial figures folder.",
+            detail="This additional LISA visualization offers a comparable view of local hotspots and supports the same set of High-High and Low-High state clusters described in the main report."
         )
 
         st.markdown("## Full visual evidence gallery")
         gallery = [
-            ("outputs/correlation_heatmap_indicators.png", "Correlation heatmap of key indicators."),
-            ("outputs/heatmap_household_conditions.png", "Household condition heatmap from the outputs folder."),
-            ("sangam_ganga_figures/fig_ols_coefficients.png", "OLS coefficient summary from the river and mining models."),
-            ("sangam_ganga_figures/fig_kumbh_mela_effect.png", "Kumbh Mela effect diagnostics computed during the analysis."),
+            (
+                "outputs/correlation_heatmap_indicators.png",
+                "Correlation heatmap of key indicators.",
+                "This heatmap highlights how mining intensity co-varies with economic, environmental, and governance indicators across states. It is a useful visual summary of the report's cross-sectional analysis."
+            ),
+            (
+                "outputs/heatmap_household_conditions.png",
+                "Household condition heatmap from the outputs folder.",
+                "The report uses this map to show that poor housing conditions are geographically correlated with mining activity, reinforcing the idea that the problem is structurally linked to inequality."
+            ),
+            (
+                "sangam_ganga_figures/fig_ols_coefficients.png",
+                "OLS coefficient summary from the river and mining models.",
+                "This figure summarizes the baseline regression results and shows that environmental and crime variables alone explain only a modest share of mining variance."
+            ),
+            (
+                "sangam_ganga_figures/fig_kumbh_mela_effect.png",
+                "Kumbh Mela effect diagnostics computed during the analysis.",
+                "The report treats the Kumbh Mela period as a confounding event. This image demonstrates how seasonal and event-related noise was identified and separated from the mining signal."
+            ),
         ]
-        for path, caption in gallery:
-            st.markdown(f"#### {path.split('/')[-1].replace('_', ' ').replace('.png','').title()}")
+        for path, caption, detail in gallery:
+            file_title = path.split('/')[-1].replace('_', ' ').replace('.png', '').title()
+            st.markdown(f"#### {file_title}")
             try:
-                st.image(path, use_column_width=True)
+                st.image(path, width="stretch")
             except Exception:
                 st.info(f"File not found: {path}")
+            if detail:
+                st.markdown(detail)
             st.markdown(f"*{caption}*")
 
         st.markdown("## What this means for India")
@@ -986,6 +1283,132 @@ The most actionable implications are:
 3. Couple housing policy with sustainable material policy and river monitoring.
 4. Use spatial analysis and sensor data together to make enforcement proactive rather than reactive.
 """)
+
+    with tab5:
+        st.markdown("<h1>Blog: Report Narrative</h1>", unsafe_allow_html=True)
+        st.markdown(
+            "<p style='color:#5a4e3c; font-size:1rem; margin-top:-0.5rem;'>"
+            "The following narrative is drawn directly from report.pdf. The text is presented in a readable blog-style format while preserving the report’s own wording."
+            "</p>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("## Abstract")
+        st.markdown(
+            "Illegal sand mining is one of India’s most pervasive and violent forms of organized crime, yet it remains systematically under-studied and chronically under-documented. "
+            "This report presents a multi-lens data science investigation that confronts, as its defining challenge, the near-complete absence of cohesive, centralized data on illegal extraction activity in India. "
+            "No single authoritative database exists. Instead, evidence of the Sand Mafia is scattered across citizen field reports, journalistic archives, National Green Tribunal court filings, government district surveys, environmental sensor streams, and administrative housing records that were never designed to interoperate. "
+            "Our principal accomplishment is the synthesis of seven heterogeneous data sources spanning criminal justice, housing policy, environmental monitoring, socioeconomic indicators, and real-time sensor telemetry into a unified analytical framework: the India Sand Watch platform, the National Data and Analytics Platform (NDAP), the Water Resources Information System (WRIS), the Central Pollution Control Board (CPCB), Pradhan Mantri Awas Yojana-Urban (PMAY-U) administrative records, Census 2011 socioeconomic tables, and two continuous water-quality sensors at Prayagraj. "
+            "Drawing on 2,557 mining records, 91 court documents, 124 news reports, and 375 field observations spanning 2001 to 2026, we apply exploratory spatial analysis, Difference-in-Differences, Two-Stage Least Squares, synthetic control, bootstrapped mediation, NLP-based classification, and machine learning to construct, piece by piece, a picture of what illegal sand mining looks like in the absence of direct observational data. "
+            "We identify two dominant mining corridors (the Gangetic plains and the Central India plateau), establish through causal inference methods that the 2015 PMAY-U launch caused a genuine increase in illegal extraction (DiD ˆβ= +1 .057, p <0.001; synthetic control excess: +158% for Uttar Pradesh), and find that 100% of Bihar groundwater monitoring stations and 78% of West Bengal stations show elevated Total Dissolved Solids near mining sites. Data fragmentation is not merely a methodological inconvenience: it is a structural enabler of the Sand Mafia’s impunity, and demonstrating that a rigorous cross-sector analysis is possible despite it is itself a contribution to future research and policy design."
+        )
+
+        st.markdown("## Thematic Problem")
+        st.markdown(
+            "Sand is the second-most exploited natural resource in the world after water. It is the primary input for concrete, glass, asphalt, and electronics manufacturing, making it indispensable to modern construction and industry. "
+            "The United Nations Environment Programme (UNEP) estimates that more than 50 billion tonnes of sand and gravel are extracted globally every year, a figure that dwarfs the replenishment capacity of rivers and coastal systems. Demand is only expected to intensify: the United Nations estimates that by 2030, the world will have 40 megacities (cities with populations exceeding 10 million), compared to 31 today, each requiring enormous quantities of construction-grade aggregates. India sits at the center of this pressure: it is one of the fastest-urbanizing nations on earth, with a government-mandated housing program (the Pradhan Mantri Awas Yojana-Urban, or PMAY-U) that has sanctioned nearly 12 million new houses since its launch in 2015."
+        )
+        st.markdown(
+            "Because legally permitted sand extraction struggles to meet this accelerating demand, a shadow supply chain has emerged. India’s “Sand Mafia” is an informal network of organized criminal groups that extract, transport, and sell sand illegally from rivers, floodplains, and coastal areas. Their operations are frequently accompanied by violence: between 2019 and 2023, documented incidents include the deaths of government officials, journalists, and civilians who attempted to report or obstruct mining activities. Despite the scale and severity of this phenomenon, academic and policy research on India’s Sand Mafia remains sparse. Most existing literature treats it as a localized governance failure rather than a systemic, nationally distributed organized crime problem with measurable structural drivers."
+        )
+        st.markdown(
+            "This report attempts to partially fill that gap. We treat illegal sand mining not as an isolated criminal event but as a complex socioeconomic outcome shaped by construction demand, poverty, enforcement capacity, environmental conditions, and geographic opportunity. Our analysis proceeds through four thematic lenses:"
+        )
+        st.markdown(
+            "- Geographic lens: Where is illegal sand mining concentrated, and does it form spatial clusters that suggest coordinated criminal networks rather than opportunistic individual actors?\n"
+            "- Demand lens: Can we demonstrate a causal link between large-scale government construction programs and the intensification of illegal extraction?\n"
+            "- Socioeconomic lens: Are states with higher rates of poverty, marginal employment, and poor housing conditions more prone to sustained illegal mining activity?\n"
+            "- Environmental lens: Does proximity to active sand mining sites correlate with measurable degradation in groundwater quality and air particulate levels?"
+        )
+
+        st.markdown("## Why Sand Mining Is Harmful")
+        st.markdown(
+            "Before proceeding to the data, it is worth grounding the problem in its environmental and human consequences, because the urgency of these consequences is what justifies the analytical effort."
+        )
+        st.markdown(
+            "Ecological destruction. Rivers are not static containers of water. They are dynamic systems in which sand and gravel serve as habitat for thousands of species, regulate streamflow, anchor riverbanks, and filter groundwater. When sand is removed from riverbeds faster than natural deposition can replace it (a process called riverbed incision), channels deepen and banks become unstable. This triggers a cascade: bridges lose their foundations, floodplains no longer receive seasonal sediment, and the water table drops because the natural sponge layer beneath the river is removed. Studies of heavily mined rivers in India have documented bank collapses, loss of aquatic biodiversity, and the drying up of small tributaries."
+        )
+        st.markdown(
+            "Groundwater contamination. Sand mining disturbs the mineral-rich sediment layer of riverbeds, releasing dissolved solids (including heavy metals) into the water column. Total Dissolved Solids (TDS), the measure of the combined content of all inorganic and organic substances dissolved in water, are a standard proxy for this contamination. Our analysis of Water Resources Information System (WRIS) groundwater quality data across India, examined in Section 2.2.1, finds that stations closer to active mining sites tend to show elevated TDS readings, with the effect most pronounced in Bihar and West Bengal."
+        )
+        st.markdown(
+            "Air quality degradation. The transport of sand by truck, tractor, and barge generates large quantities of coarse particulate matter. PM10 and PM2.5, the two standard regulatory metrics for airborne particles (referring to particles with diameters of 10 and 2.5 micrometers or less, respectively), have been linked to respiratory disease, cardiovascular damage, and premature death in exposed populations. Our spatial regression analysis finds that PM10 is the most strongly correlated environmental variable with mining intensity at the state level."
+        )
+        st.markdown(
+            "Violence and impunity. The Sand Mafia operates in a context of systemic legal impunity. Court documents in our dataset reveal patterns in which local officials are allegedly bribed, whistleblowers are threatened, and environmental regulations are routinely violated without sanction. The gap between observed mining intensity and the rate of court-recognized legal cases (analyzed in Section 2.2.4) is itself a measure of this impunity."
+        )
+        st.markdown(
+            "Social inequality. Illegal sand mining is not uniformly distributed across society. It correlates highly with the geographic concentration of marginal workers in river-adjacent and resource-dependent areas, where livelihoods are most vulnerable to environmental disruption. The communities whose rivers and groundwater are depleted receive no compensation. This makes illegal sand mining both an environmental problem and a question of social justice."
+        )
+
+        st.markdown("## The Data Integration Challenge")
+        st.markdown(
+            "The central methodological challenge of this project is one that no amount of analytical sophistication can fully overcome: there is no single, authoritative, comprehensive dataset on illegal sand mining in India. Unlike conventional crime statistics, which are collected by a centralized agency (the NCRB) and published in a standardized annual format, sand mining incidents are scattered across field observation networks, journalistic archives, court filings, government district surveys, and environmental monitoring databases that were never designed to interoperate."
+        )
+        st.markdown(
+            "This fragmentation is not accidental. The Sand Mafia thrives in informational darkness: the absence of systematic documentation is itself a governance failure that perpetuates impunity. When there is no official count of mining incidents, there is no official accountability for failing to address them."
+        )
+        st.markdown(
+            "Our response to this challenge is the defining accomplishment of this project: the assembly of a unified analytical framework from seven fundamentally different data sources."
+        )
+
+        st.markdown("## Primary Relevant Datasets")
+        st.markdown(
+            "The National Data and Analytics Platform aggregates official government statistical series from multiple ministries and agencies. The following NDAP datasets were used in this analysis:"
+        )
+        st.markdown(
+            "- Crime in India (NCRB): The National Crime Records Bureau (NCRB) publishes annual state-level crime statistics under the Indian Penal Code (IPC). We use the “cognizable crimes reported” rate per 100,000 population as a proxy for the overall law enforcement environment in each state. A cognizable crime is one for which a police officer may arrest without a warrant under Indian law. The dataset covers 2022 data across all 36 states and Union Territories.\n"
+            "- Police Personnel (NCRB): State-level data on the total number of authorized and actual police personnel, disaggregated by rank (constable, sub-inspector, inspector, etc.). We aggregate these into a single “total police strength” variable and compute a mining-incidents-per-police-personnel ratio to assess enforcement capacity relative to mining activity.\n"
+            "- Household Conditions (Census): State-level data on the proportion of households classified as being in good, liveable, or dilapidated condition. This serves as a proxy for material poverty and unmet housing needs.\n"
+            "- Population and Literacy (Census 2011): State-level data on total population, literate population (used to compute literacy rate), and the proportion of “marginal workers” (a Census category referring to individuals who work fewer than 183 days per year, indicating unstable, seasonal, or informal employment).\n"
+            "- PM2.5 and PM10 Air Quality (CPCB): Annual average concentrations of fine and coarse particulate matter measured at state-level monitoring stations, compiled from the Central Pollution Control Board (CPCB) database.\n"
+            "- Groundwater Quality (WRIS): The Water Resources Information System maintains a national network of groundwater monitoring stations. We use station-level latitude, longitude, and Total Dissolved Solids (TDS) measurements, aggregated by state and by individual station for the Geographically Weighted Regression analysis.\n"
+            "- PMAY-U Construction Data: State-level and district-level data on houses sanctioned, grounded, and completed under the Pradhan Mantri Awas Yojana-Urban scheme, as well as the central government assistance allocation (in crore rupees) to each state. This is the primary measure of construction demand in our causal analysis."
+        )
+
+        st.markdown("## Exploratory Data Analysis Results")
+        st.markdown(
+            "The 375 field observation records span 2016 to 2023, with the majority concentrated after 2017. Bihar is the single most-reported state with 193 observations, followed by Uttar Pradesh (48), West Bengal (48), and Madhya Pradesh (43). This distribution is notably skewed: Bihar alone accounts for 51% of all field observations. However, the broader unified geo dataset (2,212 records) tells a different story at the state level: Madhya Pradesh leads with 369 incidents, followed by Maharashtra (210), Uttar Pradesh (130), and Tamil Nadu (125). The divergence between observation data and aggregated incident data reflects differences in data collection methodology: field observers are concentrated in certain regions, while the aggregated data incorporates news reports, court documents, and survey data that are more uniformly distributed."
+        )
+        st.markdown(
+            "A key early finding is the severe mismatch between states in terms of “formal” versus “informal” reporting. Bihar has 193 informal field observations but very few corresponding court cases. Madhya Pradesh, by contrast, has 279 news-level incidents and a substantial body of NGT court filings. This asymmetry hints at differential legal enforcement, and motivates the classification analysis in Section 2.2.4."
+        )
+
+        st.markdown("## Spatial Distribution and Clustering")
+        st.markdown(
+            "The global Moran’s I for state-level mining counts is I= 0.121 (z= 1.29, p= 0.108 under 999 permutations). This represents a marginal positive clustering tendency (high-mining states tend to be adjacent to other high-mining states), but the result falls just below the conventional statistical significance threshold of α= 0.05. This means we cannot conclusively reject the null hypothesis of spatial randomness at the state level, though the positive direction of the statistic is consistent with coordinated cross-border criminal networks."
+        )
+        st.markdown(
+            "Local Indicators of Spatial Association (LISA) decompose the global Moran’s I into state-level contributions, allowing us to identify specific geographic hotspots and coldspots. Under this method, states are classified into four quadrant types: High-High (HH, a high-mining state surrounded by other high-mining states), Low-Low (LL), High-Low (HL, an isolated high-mining state surrounded by low-mining neighbors), and Low-High (LH). At p < 0.05 (under 999 permutations), the following classifications emerge: HH hotspot states: Goa, Gujarat, Madhya Pradesh, and Rajasthan; HL spatial outlier: Assam; LH spatial outliers: Chhattisgarh, Dadra and Nagar Haveli, and Jharkhand; LL coldspots: Andaman and Nicobar Islands and Lakshadweep."
+        )
+
+        st.markdown("## Spatial Regression and Water Quality")
+        st.markdown(
+            "An Ordinary Least Squares (OLS) model serves as the baseline: it estimates the linear relationship between mining intensity (log-transformed) and the predictors without accounting for the geographic relationships between states. The OLS model achieves R2= 0.158, with PM10 showing the largest coefficient (β= +1.17, p= 0.123), though no predictor reaches individual statistical significance. The low R2 indicates that state-level environmental and crime variables explain only a modest fraction of the variance in mining intensity. This is not surprising: geography (which rivers a state contains) and political economy (which networks have entrenched themselves) are likely more important determinants."
+        )
+        st.markdown(
+            "We applied Geographically Weighted Regression to the relationship between groundwater quality (log-transformed Total Dissolved Solids, TDS) at 7,190 WRIS monitoring stations and each station’s distance to the nearest confirmed mining point. A negative local GWR coefficient on this distance variable means that closer proximity to mining is associated with higher TDS: the expected contamination signal. Globally, the GWR achieves R2= 0.545, a substantial improvement over OLS, indicating that the relationship between mining proximity and water quality is highly spatially heterogeneous."
+        )
+        st.markdown(
+            "The state-level breakdown of local GWR coefficients reveals striking regional variation. In Bihar, 100% of monitoring stations show negative coefficients (closer to mining = worse water quality), with a median β=−0.346. In West Bengal, 78% of stations show negative coefficients (median β=−0.505). In Madhya Pradesh, only 39% show negative coefficients (median β= +0.215), suggesting that the naturally mineral-rich hard-rock geology of the Chambal basin masks the contamination signal from mining."
+        )
+
+        st.markdown("## Construction Demand and Causal Inference")
+        st.markdown(
+            "The mining time series shows a clear structural break around 2015. Pre-2015 annual averages are 13 incidents per year; post-2015 annual averages are 191 incidents per year. A Mann-Whitney U test (a non-parametric test that compares the medians of two distributions without assuming they are normally distributed) confirms this difference is statistically significant (p= 0.0011). However, a Chow test for a structural break (a test that asks whether the regression slope and intercept change significantly at a specified breakpoint) does not reach significance at the 2015 breakpoint (F= 0.44, p= 0.655), suggesting that while levels increased, the rate of change was already trending upward before 2015."
+        )
+        st.markdown(
+            "To move closer to a causal claim, we implement a Difference-in-Differences design. This method compares the change in outcomes before and after a policy intervention in a “treated” group (states with high PMAY-U allocations) against the change in a “control” group (states with low allocations), under the assumption that both groups would have followed parallel trends in the absence of the program. Treatment is defined as being above the median in PMAY houses sanctioned per state. The estimated DiD coefficient is ˆβ= +1.057 (p <0.001, 95% CI: [0.855, 1.259]), implying that high-PMAY states experienced 187.7% more mining post-2015 than low-PMAY states, relative to their pre-2015 difference. An event study design shows no significant pre-2015 differential trends between treated and control states (F= 0.406, p= 0.805), supporting the parallel trends assumption."
+        )
+
+        st.markdown("## Original PDF")
+        try:
+            st.components.v1.html(
+                '<iframe src="report.pdf" width="100%" height="800"></iframe>',
+                height=820
+            )
+        except Exception:
+            st.info("Unable to embed the PDF preview. Please open report.pdf directly.")
 
 if __name__ == "__main__":
     main()
