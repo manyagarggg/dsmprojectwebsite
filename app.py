@@ -584,7 +584,7 @@ India district polygons<br>
     )
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining", "Research Narrative"])
 
     with tab1:
         st.markdown(
@@ -763,6 +763,229 @@ decoupled from construction demand, occurring primarily in economically vulnerab
 *Research conducted using rigorous statistical methods across spatial analysis, causal inference, and environmental monitoring.*
         """)
 
+
+    with tab4:
+        st.markdown("<h1>Research Narrative & Evidence Bank</h1>", unsafe_allow_html=True)
+        st.markdown(
+            "<p style='color:#5a4e3c; font-size:1rem; margin-top:-0.5rem;'>"
+            "This page stitches together the full story from our dataset, maps, causal checks, and environmental validation. "
+            "Every output figure and spatial analysis piece is placed in context so the evidence is visible and readable." 
+            "</p>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("## What we studied")
+        st.markdown("""
+- 2,212 verified mining incidents from IndiaSandWatch
+- 375 ground-observed field reports
+- State and district housing allocations from PMAY-U
+- Census-derived socioeconomic indicators
+- IPC crime intensity and urban crime rates
+- Ganga and Sangam water sensor time series
+- State and district geography from India shapefiles
+""")
+
+        st.markdown("## The thesis")
+        st.markdown("""
+The data shows a clear narrative: illegal sand mining in India is not primarily a story of poverty. It is a story of construction demand, supply-state extraction, and river corridor stress.
+
+Our strongest findings are:
+- PMAY-driven housing policy sharply amplified illegal extraction.
+- Mining hotspots are spatially decoupled from the states that consume the sand.
+- Environmental sensors confirm the river-quality signal of extraction.
+- Spatial statistics and machine learning both identify the same policy-driven pattern.
+""")
+
+        def render_asset(title, path, caption):
+            st.markdown(f"#### {title}")
+            if path.endswith('.html'):
+                try:
+                    html_code = open(path, 'r', encoding='utf-8').read()
+                    st.components.v1.html(html_code, height=460)
+                except Exception:
+                    st.info(f"File not found or failed to render: {path}")
+            else:
+                try:
+                    st.image(path, use_column_width=True)
+                except Exception:
+                    st.info(f"File not found: {path}")
+            st.markdown(f"*{caption}*")
+
+        st.markdown("## Core evidence")
+        render_asset(
+            "Mining Incident Heatmap",
+            "outputs/heatmap_mining_observations.png",
+            "Density of verified mining incidents across India, highlighting river corridors and high-activity districts."
+        )
+        render_asset(
+            "State Mining Distribution",
+            "outputs/geographic_distribution_bars.png",
+            "The state-level breakdown shows Bihar, UP and MP as the top extraction states, not the states with the biggest PMAY demand."
+        )
+        render_asset(
+            "Crime Intensity and Mining",
+            "outputs/heatmap_crime_intensity.png",
+            "Crime hotspots overlap with mining pressure zones, suggesting intertwined enforcement and social risk dynamics."
+        )
+        render_asset(
+            "Housing Stock and Mining Risk",
+            "outputs/housing_stacked_bars.png",
+            "Dilapidated housing states appear in the same broad regions as mining, but the driver remains construction policy rather than poverty alone."
+        )
+        render_asset(
+            "Dilapidated Housing Choropleth",
+            "outputs/choropleth_housing_dilapidated.html",
+            "A state-level visualisation of poor housing stock that helps place mining pressure in its policy context."
+        )
+
+        st.markdown("## The policy trigger")
+        render_asset(
+            "Temporal Surge after PMAY",
+            "sangam_ganga_figures/fig_temporal_surge.png",
+            "Annual mining incidents before and after the 2015 PMAY launch. The jump to a 14.7× higher rate is the most visible signal in the dataset."
+        )
+        render_asset(
+            "Event Study Evidence",
+            "sangam_ganga_figures/fig_event_study.png",
+            "Difference-in-differences results showing mining diverging in high-PMAY states after the policy launch."
+        )
+        render_asset(
+            "Synthetic Control for UP",
+            "sangam_ganga_figures/fig_synthetic_control.png",
+            "Uttar Pradesh mining compared to a synthetic counterfactual, isolating the impact of PMAY."
+        )
+        render_asset(
+            "Construction vs Mining Clusters",
+            "sangam_ganga_figures/fig_spatial_clusters.png",
+            "A spatial comparison showing that mining supply states do not always coincide with construction demand states."
+        )
+
+        st.markdown("## Spatial statistics and maps")
+        render_asset(
+            "Moran's I spatial autocorrelation",
+            "sangam_ganga_figures/fig_morans_i.png",
+            "Global spatial autocorrelation confirms clustering, but the strongest signal comes from state-level policy pressure."
+        )
+        render_asset(
+            "LISA hotspot analysis",
+            "sangam_ganga_figures/fig_lisa_hotspots.png",
+            "Local indicators of spatial association reveal the precise river-basin clusters that carry the highest mining risk."
+        )
+        render_asset(
+            "KDE mining density",
+            "sangam_ganga_figures/fig_kde_maps.png",
+            "Kernel density estimates of mining points, showing the geographic core of extraction."
+        )
+        render_asset(
+            "GWR coefficient patterns",
+            "sangam_ganga_figures/fig_gwr_coefficients.png",
+            "Geographically weighted regression reveals where the PMAY-mining relationship is strongest."
+        )
+        render_asset(
+            "Spatial regression diagnostics",
+            "sangam_ganga_figures/fig_spatial_regression.png",
+            "Regression results that account for spatial dependence and policy covariates."
+        )
+
+        st.markdown("## Environmental validation")
+        render_asset(
+            "River conductivity and mining seasonality",
+            "sangam_ganga_figures/fig_conductivity_mining_seasonal.png",
+            "Sensor evidence linking conductivity spikes to peak mining months."
+        )
+        render_asset(
+            "Ganga / Sangam cross-sensor time series",
+            "sangam_ganga_figures/fig_ganga_sangam_timeseries.png",
+            "Water-quality sensor data confirm that river stress rises during mining season."
+        )
+        render_asset(
+            "Seasonal river patterns",
+            "sangam_ganga_figures/fig_ganga_seasonal.png",
+            "Seasonal decomposition of river measurements shows consistent dry-season stress aligned with mining activity."
+        )
+        render_asset(
+            "Sensor correlation matrix",
+            "sangam_ganga_figures/fig_sensor_correlation.png",
+            "Correlations across sensors that link mining activity with water-quality metrics."
+        )
+
+        st.markdown("## Machine learning & feature evidence")
+        render_asset(
+            "Random Forest policy importance",
+            "sangam_ganga_figures/fig_random_forest.png",
+            "A model-based assessment showing that PMAY and related policy variables are the top predictors of mining incidence."
+        )
+        render_asset(
+            "Feature importance breakdown",
+            "sangam_ganga_figures/fig_rf_importance.png",
+            "Permutation and model importances that reinforce the policy-driven story."
+        )
+        render_asset(
+            "Feature distributions",
+            "sangam_ganga_figures/fig_feature_distributions.png",
+            "Distributional patterns of key variables used in the analysis."
+        )
+        render_asset(
+            "Supplemental spatial diagnostics",
+            "spatial_figures/fig_feature_distributions.png",
+            "Additional feature distributions from the spatial diagnostics folder."
+        )
+        render_asset(
+            "Spatial sensitivity checks",
+            "spatial_figures/fig_focus_sensitivity.png",
+            "Checks for robustness across spatial bandwidth and model settings."
+        )
+        render_asset(
+            "Spatial KDE focus",
+            "spatial_figures/fig_focus_kde.png",
+            "A focused KDE layer showing the densest mining clusters."
+        )
+        render_asset(
+            "GWR focus results",
+            "spatial_figures/fig_focus_gwr.png",
+            "Geographically weighted regression focus results for the strongest mining clusters."
+        )
+        render_asset(
+            "Spatial regression overview",
+            "spatial_figures/fig_spatial_regression.png",
+            "Additional spatial regression diagnostics from the spatial analysis folder."
+        )
+        render_asset(
+            "Spatial Moran analysis",
+            "spatial_figures/fig_morans_i.png",
+            "Another view of the global spatial autocorrelation in the mining dataset."
+        )
+        render_asset(
+            "Spatial LISA hotspots",
+            "spatial_figures/fig_lisa_hotspots.png",
+            "Extra local hotspot validation from the spatial figures folder."
+        )
+
+        st.markdown("## Full visual evidence gallery")
+        gallery = [
+            ("outputs/correlation_heatmap_indicators.png", "Correlation heatmap of key indicators."),
+            ("outputs/heatmap_household_conditions.png", "Household condition heatmap from the outputs folder."),
+            ("sangam_ganga_figures/fig_ols_coefficients.png", "OLS coefficient summary from the river and mining models."),
+            ("sangam_ganga_figures/fig_kumbh_mela_effect.png", "Kumbh Mela effect diagnostics computed during the analysis."),
+        ]
+        for path, caption in gallery:
+            st.markdown(f"#### {path.split('/')[-1].replace('_', ' ').replace('.png','').title()}")
+            try:
+                st.image(path, use_column_width=True)
+            except Exception:
+                st.info(f"File not found: {path}")
+            st.markdown(f"*{caption}*")
+
+        st.markdown("## What this means for India")
+        st.markdown("""
+The evidence is clear: illegal sand mining is not an isolated environmental problem. It is a systemic outcome of rapid housing policy and construction demand.
+
+The most actionable implications are:
+1. Create legal sand supply channels in demand states so extraction pressure does not shift to vulnerable river basins.
+2. Target enforcement in the primary supply states of Bihar, UP, and MP where extraction is concentrated.
+3. Couple housing policy with sustainable material policy and river monitoring.
+4. Use spatial analysis and sensor data together to make enforcement proactive rather than reactive.
+""")
 
 if __name__ == "__main__":
     main()
