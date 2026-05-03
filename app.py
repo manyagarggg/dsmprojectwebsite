@@ -15,7 +15,6 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from shapely import wkt
 from shapely.geometry import Point
-# import tab5_blog_replacement
 
 st.set_page_config(
     page_title="Illegal Sand Mining in India",
