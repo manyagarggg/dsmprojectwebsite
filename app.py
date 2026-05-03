@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from shapely import wkt
 from shapely.geometry import Point
-from tab5_blog_replacement import render_blog_tab 
+import tab5_blog_replacement
 
 st.set_page_config(
     page_title="Illegal Sand Mining in India",
@@ -1385,7 +1385,7 @@ The most actionable implications are:
 """)
 
     with tab5:
-        render_blog_tab()
+        tab5_blog_replacement.render_blog_tab()
 
 if __name__ == "__main__":
     main()
