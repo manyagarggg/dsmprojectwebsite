@@ -204,11 +204,10 @@ def render_blog_tab():
             <p style="font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;
                        color:#e8a838;margin-bottom:0.75rem;font-weight:600;">
                 Long Read · Data Science Investigation
-            </p>
-            <h1 style="font-family:'Playfair Display',serif;font-size:2.6rem;
-                       font-weight:900;color:#FFFFFF;line-height:1.1;margin:0 0 1rem 0;">
+            </p>            <p style="font-family:'Playfair Display',serif;font-size:2.6rem;
+                       font-weight:900;color:#c9b99;line-height:1.1;margin:0 0 1rem 0;">
                 Rivers of Sand, Rivers of Crime
-            </h1>
+            </p>
             <p style="font-size:1.1rem;color:#c9b99a;line-height:1.65;
                        max-width:680px;margin:0;">
                 How India's housing boom quietly supercharged an illegal extraction industry ,
@@ -223,7 +222,7 @@ def render_blog_tab():
                     📅 CS3340 Final Report · April 2026
                 </span>
                 <span style="font-size:0.8rem;color:#7a6e5e;">
-                    🗂 2,557 incidents · 32 states · 2001–2026
+                    🗂 2,212 incidents · 32 states · 2001–2026
                 </span>
             </div>
         </div>
@@ -309,7 +308,7 @@ def render_blog_tab():
         ("50B+", "tonnes of sand extracted globally each year"),
         ("12M", "houses sanctioned under PMAY-U since 2015"),
         ("14.7×", "surge in documented mining incidents post-2015"),
-        ("2,557", "verified mining records in this study"),
+        ("2,212", "verified mining records in this study"),
     ])
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -341,7 +340,7 @@ def render_blog_tab():
 
     _body(
         "This report's defining accomplishment is assembling a unified analytical framework from "
-        "<strong>seven heterogeneous data sources</strong>: India Sand Watch (2,557 incident records), "
+        "<strong>seven heterogeneous data sources</strong>: India Sand Watch (2,212 incident records), "
         "the National Data and Analytics Platform (NDAP), the Water Resources Information System "
         "(7,190 groundwater stations), CPCB air quality data, PMAY-U administrative records, "
         "Census 2011 socioeconomic tables, and two real-time water-quality sensors at Prayagraj "
@@ -480,7 +479,7 @@ This makes illegal sand mining **both an environmental problem and a question of
     # source_details = {
     #     "India Sand Watch (Veditum India Foundation)": {
     #         "icon": "🔴",
-    #         "records": "2,557 incident records · 2001–2026",
+    #         "records":2,212 incident records · 2001–2026",
     #         "what": "Field reports from citizen observers, journalists, court documents, government district surveys, and news archives.",
     #         "strength": "The only publicly available national-scale mining incident database in India.",
     #         "weakness": "Coverage is uneven , Bihar and MP are overrepresented; northeastern states are nearly absent.",
@@ -693,7 +692,7 @@ This asymmetry is itself a finding: **Bihar is heavily mined but weakly prosecut
 
     _chapter("08", "Four Ways to Prove Causation", "DiD, IV, synthetic control, and mediation")
 
-    st.markdown("#### The Evidence Stack")
+    _body("The Evidence Stack")
 
     with st.expander("📐 Strategy 1: Difference-in-Differences", expanded=True):
         st.markdown("""
@@ -720,7 +719,7 @@ indistinguishable between treated and control states. The assumption holds.
             "Post-period coefficients (pink) rise monotonically to +1.5 log-mining units by year +9.",
         )
 
-    with st.expander("🎯 Strategy 2: Instrumental Variables (2SLS)"):
+    with st.expander("🎯 Strategy 2: Instrumental Variables (2SLS)", expanded=True):
         st.markdown("""
 **The concern:** Maybe states that received more PMAY funding were already politically connected,
 already had more mining infrastructure, or were already diverging. DiD can't fully rule this out.
@@ -738,7 +737,7 @@ the true causal effect because of measurement error in PMAY allocation figures. 
 story survives the endogeneity correction.
         """)
 
-    with st.expander("🔬 Strategy 3: Synthetic Control for Uttar Pradesh"):
+    with st.expander("🔬 Strategy 3: Synthetic Control for Uttar Pradesh", expanded=True):
         st.markdown("""
 **The idea:** Build a "synthetic Uttar Pradesh" , a weighted combination of donor states
 that best matches UP's pre-2015 mining trajectory. Then ask: how much did actual
@@ -758,7 +757,7 @@ what UP would have experienced without PMAY.
             "The shaded region is the causal excess attributable to PMAY. ATT = +0.948 log-units (+158%).",
         )
 
-    with st.expander("🔗 Strategy 4: Bootstrapped Mediation Analysis"):
+    with st.expander("🔗 Strategy 4: Bootstrapped Mediation Analysis", expanded=True):
         st.markdown("""
 **The idea:** Poverty → PMAY allocation → sand demand → mining.
 How much of poverty's effect on mining is mediated through PMAY construction?
@@ -955,13 +954,16 @@ resources on which poor communities depend.
         "The signal concentrates in the Gangetic corridor (Bihar, West Bengal).",
     )
 
-    st.markdown("""
-| State | % Stations with Contamination Signal | Median GWR Coefficient |
-|---|---|---|
-| **Bihar** | **100%** | −0.346 |
-| **West Bengal** | **78%** | −0.505 (stronger per-unit) |
-| Madhya Pradesh | 39% | +0.215 (hard-rock geology masks signal) |
-    """)
+    contamination_data = {"Bihar": {"signal": "100%", "median": "-0.346"}, "West Bengal": {"signal": "78%", "median":"-0.505 [stronger per unit]"}, "Madhya Pradesh": {"signal": "39%", "median":"+0.215 [hard-rock geology masks signal]"}}
+
+    table_rows = [
+
+        {"State": state, 
+         "Stations with Contamination signal": values["signal"], "Median GWR Coefficient": values["median"],
+         
+         } for state, values in contamination_data.items()
+    ]
+    st.table(table_rows)
 
     _body(
         "Bihar's 100% contamination rate reflects its geology: shallow alluvial sediment connects "
@@ -1044,18 +1046,21 @@ resources on which poor communities depend.
 
     _body("Each of the 375 field reports was scored across three signal classes:")
 
-    st.markdown("""
-**Operational signals (3 pts each)**  
+    st.markdown(
+        """
+<div style="color:black">
+<strong>Operational signals (3 pts each)</strong><br>
 Mentions of JCBs, excavators, pumps, trucks, tractors, trolleys ,
-large-scale mechanized extraction inconsistent with permitted small-scale mining.
-
-**Risk signals (1–1.5 pts each)**  
-Nighttime activity, high-volume extraction, repeated / daily operations.
-
-**Legal signals (2 pts each)**  
-Court-document language: "illegal mining," "no environmental clearance," "lease violation,"
+large-scale mechanized extraction inconsistent with permitted small-scale mining.<br><br>
+<strong>Risk signals (1–1.5 pts each)</strong><br>
+Nighttime activity, high-volume extraction, repeated / daily operations.<br><br>
+<strong>Legal signals (2 pts each)</strong><br>
+Court-document language: "illegal mining," "no environmental clearance," "lease violation,"<br>
 "excess extraction," "unauthorized operation."
-    """)
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Quiz interaction
     st.markdown("#### 🔎 How illegal does this field note look?")
