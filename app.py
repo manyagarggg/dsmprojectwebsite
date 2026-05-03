@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from shapely import wkt
 from shapely.geometry import Point
+from tab5_blog_replacement import render_blog_tab 
 
 st.set_page_config(
     page_title="Illegal Sand Mining in India",
@@ -850,7 +851,7 @@ India district polygons<br>
     )
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining", "Research Narrative", "More Details"])
+    tab1, tab5, tab3, tab2, tab4 = st.tabs(["Illegal Sand Mining Map", "Blog", "Study on Sand Mining", "Correlations", "Research Narrative"])
 
     with tab1:
         st.markdown(
@@ -1384,121 +1385,7 @@ The most actionable implications are:
 """)
 
     with tab5:
-        st.markdown("<h1>Blog: Report Narrative</h1>", unsafe_allow_html=True)
-        st.markdown(
-            "<p style='color:#5a4e3c; font-size:1rem; margin-top:-0.5rem;'>"
-            "More narrative details on the high level thematic problem. 1/2 of the blog! Access 2/2 on the Research Narrative tab"
-            "</p>",
-            unsafe_allow_html=True
-        )
-
-        st.markdown("## Abstract")
-        st.markdown(
-            "Illegal sand mining is one of India’s most pervasive and violent forms of organized crime, yet it remains systematically under-studied and chronically under-documented. "
-            "This report presents a multi-lens data science investigation that confronts, as its defining challenge, the near-complete absence of cohesive, centralized data on illegal extraction activity in India. "
-            "No single authoritative database exists. Instead, evidence of the Sand Mafia is scattered across citizen field reports, journalistic archives, National Green Tribunal court filings, government district surveys, environmental sensor streams, and administrative housing records that were never designed to interoperate. "
-            "Our principal accomplishment is the synthesis of seven heterogeneous data sources spanning criminal justice, housing policy, environmental monitoring, socioeconomic indicators, and real-time sensor telemetry into a unified analytical framework: the India Sand Watch platform, the National Data and Analytics Platform (NDAP), the Water Resources Information System (WRIS), the Central Pollution Control Board (CPCB), Pradhan Mantri Awas Yojana-Urban (PMAY-U) administrative records, Census 2011 socioeconomic tables, and two continuous water-quality sensors at Prayagraj. "
-            "Drawing on 2,557 mining records, 91 court documents, 124 news reports, and 375 field observations spanning 2001 to 2026, we apply exploratory spatial analysis, Difference-in-Differences, Two-Stage Least Squares, synthetic control, bootstrapped mediation, NLP-based classification, and machine learning to construct, piece by piece, a picture of what illegal sand mining looks like in the absence of direct observational data. "
-            "We identify two dominant mining corridors (the Gangetic plains and the Central India plateau), establish through causal inference methods that the 2015 PMAY-U launch caused a genuine increase in illegal extraction (DiD ˆβ= +1 .057, p <0.001; synthetic control excess: +158% for Uttar Pradesh), and find that 100% of Bihar groundwater monitoring stations and 78% of West Bengal stations show elevated Total Dissolved Solids near mining sites. Data fragmentation is not merely a methodological inconvenience: it is a structural enabler of the Sand Mafia’s impunity, and demonstrating that a rigorous cross-sector analysis is possible despite it is itself a contribution to future research and policy design."
-        )
-
-        st.markdown("## Thematic Problem")
-        st.markdown(
-            "Sand is the second-most exploited natural resource in the world after water. It is the primary input for concrete, glass, asphalt, and electronics manufacturing, making it indispensable to modern construction and industry. "
-            "The United Nations Environment Programme (UNEP) estimates that more than 50 billion tonnes of sand and gravel are extracted globally every year, a figure that dwarfs the replenishment capacity of rivers and coastal systems. Demand is only expected to intensify: the United Nations estimates that by 2030, the world will have 40 megacities (cities with populations exceeding 10 million), compared to 31 today, each requiring enormous quantities of construction-grade aggregates. India sits at the center of this pressure: it is one of the fastest-urbanizing nations on earth, with a government-mandated housing program (the Pradhan Mantri Awas Yojana-Urban, or PMAY-U) that has sanctioned nearly 12 million new houses since its launch in 2015."
-        )
-        st.markdown(
-            "Because legally permitted sand extraction struggles to meet this accelerating demand, a shadow supply chain has emerged. India’s “Sand Mafia” is an informal network of organized criminal groups that extract, transport, and sell sand illegally from rivers, floodplains, and coastal areas. Their operations are frequently accompanied by violence: between 2019 and 2023, documented incidents include the deaths of government officials, journalists, and civilians who attempted to report or obstruct mining activities. Despite the scale and severity of this phenomenon, academic and policy research on India’s Sand Mafia remains sparse. Most existing literature treats it as a localized governance failure rather than a systemic, nationally distributed organized crime problem with measurable structural drivers."
-        )
-        st.markdown(
-            "This report attempts to partially fill that gap. We treat illegal sand mining not as an isolated criminal event but as a complex socioeconomic outcome shaped by construction demand, poverty, enforcement capacity, environmental conditions, and geographic opportunity. Our analysis proceeds through four thematic lenses:"
-        )
-        st.markdown(
-            "- Geographic lens: Where is illegal sand mining concentrated, and does it form spatial clusters that suggest coordinated criminal networks rather than opportunistic individual actors?\n"
-            "- Demand lens: Can we demonstrate a causal link between large-scale government construction programs and the intensification of illegal extraction?\n"
-            "- Socioeconomic lens: Are states with higher rates of poverty, marginal employment, and poor housing conditions more prone to sustained illegal mining activity?\n"
-            "- Environmental lens: Does proximity to active sand mining sites correlate with measurable degradation in groundwater quality and air particulate levels?"
-        )
-
-        st.markdown("## Why Sand Mining Is Harmful")
-        st.markdown(
-            "Before proceeding to the data, it is worth grounding the problem in its environmental and human consequences, because the urgency of these consequences is what justifies the analytical effort."
-        )
-        st.markdown(
-            "Ecological destruction. Rivers are not static containers of water. They are dynamic systems in which sand and gravel serve as habitat for thousands of species, regulate streamflow, anchor riverbanks, and filter groundwater. When sand is removed from riverbeds faster than natural deposition can replace it (a process called riverbed incision), channels deepen and banks become unstable. This triggers a cascade: bridges lose their foundations, floodplains no longer receive seasonal sediment, and the water table drops because the natural sponge layer beneath the river is removed. Studies of heavily mined rivers in India have documented bank collapses, loss of aquatic biodiversity, and the drying up of small tributaries."
-        )
-        st.markdown(
-            "Groundwater contamination. Sand mining disturbs the mineral-rich sediment layer of riverbeds, releasing dissolved solids (including heavy metals) into the water column. Total Dissolved Solids (TDS), the measure of the combined content of all inorganic and organic substances dissolved in water, are a standard proxy for this contamination. Our analysis of Water Resources Information System (WRIS) groundwater quality data across India, examined in Section 2.2.1, finds that stations closer to active mining sites tend to show elevated TDS readings, with the effect most pronounced in Bihar and West Bengal."
-        )
-        st.markdown(
-            "Air quality degradation. The transport of sand by truck, tractor, and barge generates large quantities of coarse particulate matter. PM10 and PM2.5, the two standard regulatory metrics for airborne particles (referring to particles with diameters of 10 and 2.5 micrometers or less, respectively), have been linked to respiratory disease, cardiovascular damage, and premature death in exposed populations. Our spatial regression analysis finds that PM10 is the most strongly correlated environmental variable with mining intensity at the state level."
-        )
-        st.markdown(
-            "Violence and impunity. The Sand Mafia operates in a context of systemic legal impunity. Court documents in our dataset reveal patterns in which local officials are allegedly bribed, whistleblowers are threatened, and environmental regulations are routinely violated without sanction. The gap between observed mining intensity and the rate of court-recognized legal cases (analyzed in Section 2.2.4) is itself a measure of this impunity."
-        )
-        st.markdown(
-            "Social inequality. Illegal sand mining is not uniformly distributed across society. It correlates highly with the geographic concentration of marginal workers in river-adjacent and resource-dependent areas, where livelihoods are most vulnerable to environmental disruption. The communities whose rivers and groundwater are depleted receive no compensation. This makes illegal sand mining both an environmental problem and a question of social justice."
-        )
-
-        st.markdown("## The Data Integration Challenge")
-        st.markdown(
-            "The central methodological challenge of this project is one that no amount of analytical sophistication can fully overcome: there is no single, authoritative, comprehensive dataset on illegal sand mining in India. Unlike conventional crime statistics, which are collected by a centralized agency (the NCRB) and published in a standardized annual format, sand mining incidents are scattered across field observation networks, journalistic archives, court filings, government district surveys, and environmental monitoring databases that were never designed to interoperate."
-        )
-        st.markdown(
-            "This fragmentation is not accidental. The Sand Mafia thrives in informational darkness: the absence of systematic documentation is itself a governance failure that perpetuates impunity. When there is no official count of mining incidents, there is no official accountability for failing to address them."
-        )
-        st.markdown(
-            "Our response to this challenge is the defining accomplishment of this project: the assembly of a unified analytical framework from seven fundamentally different data sources."
-        )
-
-        st.markdown("## Primary Relevant Datasets")
-        st.markdown(
-            "The National Data and Analytics Platform aggregates official government statistical series from multiple ministries and agencies. The following NDAP datasets were used in this analysis:"
-        )
-        st.markdown(
-            "- Crime in India (NCRB): The National Crime Records Bureau (NCRB) publishes annual state-level crime statistics under the Indian Penal Code (IPC). We use the “cognizable crimes reported” rate per 100,000 population as a proxy for the overall law enforcement environment in each state. A cognizable crime is one for which a police officer may arrest without a warrant under Indian law. The dataset covers 2022 data across all 36 states and Union Territories.\n"
-            "- Police Personnel (NCRB): State-level data on the total number of authorized and actual police personnel, disaggregated by rank (constable, sub-inspector, inspector, etc.). We aggregate these into a single “total police strength” variable and compute a mining-incidents-per-police-personnel ratio to assess enforcement capacity relative to mining activity.\n"
-            "- Household Conditions (Census): State-level data on the proportion of households classified as being in good, liveable, or dilapidated condition. This serves as a proxy for material poverty and unmet housing needs.\n"
-            "- Population and Literacy (Census 2011): State-level data on total population, literate population (used to compute literacy rate), and the proportion of “marginal workers” (a Census category referring to individuals who work fewer than 183 days per year, indicating unstable, seasonal, or informal employment).\n"
-            "- PM2.5 and PM10 Air Quality (CPCB): Annual average concentrations of fine and coarse particulate matter measured at state-level monitoring stations, compiled from the Central Pollution Control Board (CPCB) database.\n"
-            "- Groundwater Quality (WRIS): The Water Resources Information System maintains a national network of groundwater monitoring stations. We use station-level latitude, longitude, and Total Dissolved Solids (TDS) measurements, aggregated by state and by individual station for the Geographically Weighted Regression analysis.\n"
-            "- PMAY-U Construction Data: State-level and district-level data on houses sanctioned, grounded, and completed under the Pradhan Mantri Awas Yojana-Urban scheme, as well as the central government assistance allocation (in crore rupees) to each state. This is the primary measure of construction demand in our causal analysis."
-        )
-
-        st.markdown("## Exploratory Data Analysis Results")
-        st.markdown(
-            "The 375 field observation records span 2016 to 2023, with the majority concentrated after 2017. Bihar is the single most-reported state with 193 observations, followed by Uttar Pradesh (48), West Bengal (48), and Madhya Pradesh (43). This distribution is notably skewed: Bihar alone accounts for 51% of all field observations. However, the broader unified geo dataset (2,212 records) tells a different story at the state level: Madhya Pradesh leads with 369 incidents, followed by Maharashtra (210), Uttar Pradesh (130), and Tamil Nadu (125). The divergence between observation data and aggregated incident data reflects differences in data collection methodology: field observers are concentrated in certain regions, while the aggregated data incorporates news reports, court documents, and survey data that are more uniformly distributed."
-        )
-        st.markdown(
-            "A key early finding is the severe mismatch between states in terms of “formal” versus “informal” reporting. Bihar has 193 informal field observations but very few corresponding court cases. Madhya Pradesh, by contrast, has 279 news-level incidents and a substantial body of NGT court filings. This asymmetry hints at differential legal enforcement, and motivates the classification analysis in Section 2.2.4."
-        )
-
-        st.markdown("## Spatial Distribution and Clustering")
-        st.markdown(
-            "The global Moran’s I for state-level mining counts is I= 0.121 (z= 1.29, p= 0.108 under 999 permutations). This represents a marginal positive clustering tendency (high-mining states tend to be adjacent to other high-mining states), but the result falls just below the conventional statistical significance threshold of α= 0.05. This means we cannot conclusively reject the null hypothesis of spatial randomness at the state level, though the positive direction of the statistic is consistent with coordinated cross-border criminal networks."
-        )
-        st.markdown(
-            "Local Indicators of Spatial Association (LISA) decompose the global Moran’s I into state-level contributions, allowing us to identify specific geographic hotspots and coldspots. Under this method, states are classified into four quadrant types: High-High (HH, a high-mining state surrounded by other high-mining states), Low-Low (LL), High-Low (HL, an isolated high-mining state surrounded by low-mining neighbors), and Low-High (LH). At p < 0.05 (under 999 permutations), the following classifications emerge: HH hotspot states: Goa, Gujarat, Madhya Pradesh, and Rajasthan; HL spatial outlier: Assam; LH spatial outliers: Chhattisgarh, Dadra and Nagar Haveli, and Jharkhand; LL coldspots: Andaman and Nicobar Islands and Lakshadweep."
-        )
-
-        st.markdown("## Spatial Regression and Water Quality")
-        st.markdown(
-            "An Ordinary Least Squares (OLS) model serves as the baseline: it estimates the linear relationship between mining intensity (log-transformed) and the predictors without accounting for the geographic relationships between states. The OLS model achieves R2= 0.158, with PM10 showing the largest coefficient (β= +1.17, p= 0.123), though no predictor reaches individual statistical significance. The low R2 indicates that state-level environmental and crime variables explain only a modest fraction of the variance in mining intensity. This is not surprising: geography (which rivers a state contains) and political economy (which networks have entrenched themselves) are likely more important determinants."
-        )
-        st.markdown(
-            "We applied Geographically Weighted Regression to the relationship between groundwater quality (log-transformed Total Dissolved Solids, TDS) at 7,190 WRIS monitoring stations and each station’s distance to the nearest confirmed mining point. A negative local GWR coefficient on this distance variable means that closer proximity to mining is associated with higher TDS: the expected contamination signal. Globally, the GWR achieves R2= 0.545, a substantial improvement over OLS, indicating that the relationship between mining proximity and water quality is highly spatially heterogeneous."
-        )
-        st.markdown(
-            "The state-level breakdown of local GWR coefficients reveals striking regional variation. In Bihar, 100% of monitoring stations show negative coefficients (closer to mining = worse water quality), with a median β=−0.346. In West Bengal, 78% of stations show negative coefficients (median β=−0.505). In Madhya Pradesh, only 39% show negative coefficients (median β= +0.215), suggesting that the naturally mineral-rich hard-rock geology of the Chambal basin masks the contamination signal from mining."
-        )
-
-        st.markdown("## Construction Demand and Causal Inference")
-        st.markdown(
-            "The mining time series shows a clear structural break around 2015. Pre-2015 annual averages are 13 incidents per year; post-2015 annual averages are 191 incidents per year. A Mann-Whitney U test (a non-parametric test that compares the medians of two distributions without assuming they are normally distributed) confirms this difference is statistically significant (p= 0.0011). However, a Chow test for a structural break (a test that asks whether the regression slope and intercept change significantly at a specified breakpoint) does not reach significance at the 2015 breakpoint (F= 0.44, p= 0.655), suggesting that while levels increased, the rate of change was already trending upward before 2015."
-        )
-        st.markdown(
-            "To move closer to a causal claim, we implement a Difference-in-Differences design. This method compares the change in outcomes before and after a policy intervention in a “treated” group (states with high PMAY-U allocations) against the change in a “control” group (states with low allocations), under the assumption that both groups would have followed parallel trends in the absence of the program. Treatment is defined as being above the median in PMAY houses sanctioned per state. The estimated DiD coefficient is ˆβ= +1.057 (p <0.001, 95% CI: [0.855, 1.259]), implying that high-PMAY states experienced 187.7% more mining post-2015 than low-PMAY states, relative to their pre-2015 difference. An event study design shows no significant pre-2015 differential trends between treated and control states (F= 0.406, p= 0.805), supporting the parallel trends assumption."
-        )
+        render_blog_tab()
 
 if __name__ == "__main__":
     main()
