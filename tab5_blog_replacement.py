@@ -1152,42 +1152,19 @@ Court-document language: "illegal mining," "no environmental clearance," "lease 
         "Karnataka": {"observed": 18, "court": 29, "gap": "🟢 Negative (proactive)"},
     }
 
-    selected_state = st.selectbox(
-        "Explore enforcement gap by state:",
-        list(enforcement_data.keys()),
-        label_visibility="collapsed",
-    )
+    st.markdown("### Enforcement gap by state")
 
-    d = enforcement_data[selected_state]
-    gap_col = "#c0392b" if "Very Large" in d["gap"] or "🔴" in d["gap"] else \
-              "#e8a838" if "🟠" in d["gap"] or "🟡" in d["gap"] else "#27ae60"
+    table_rows = [
+        {
+            "State": state,
+            "Observed illegal rate": values["observed"],
+            "Court-recognized rate": values["court"],
+            "Enforcement gap": values["gap"],
+        }
+        for state, values in enforcement_data.items()
+    ]
 
-    st.markdown(
-        f"""
-        <div style="background:#fff8ee;border:1.5px solid #e0d5c4;border-radius:8px;
-                    padding:1.2rem 1.5rem;margin-top:0.5rem;display:flex;gap:2rem;flex-wrap:wrap;">
-            <div>
-                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;
-                            color:#7a6e5e;">Observed illegal rate</div>
-                <div style="font-family:'Playfair Display',serif;font-size:1.8rem;
-                            color:#1c1a17;">{d['observed']}%</div>
-            </div>
-            <div>
-                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;
-                            color:#7a6e5e;">Court-recognized rate</div>
-                <div style="font-family:'Playfair Display',serif;font-size:1.8rem;
-                            color:#1c1a17;">{d['court']}%</div>
-            </div>
-            <div>
-                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;
-                            color:#7a6e5e;">Enforcement gap</div>
-                <div style="font-size:1.1rem;font-weight:700;color:{gap_col};
-                            margin-top:0.4rem;">{d['gap']}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.table(table_rows)
 
     _chapter("15", "Six Policy Levers That Could Work", "Evidence-based recommendations")
 
