@@ -851,7 +851,7 @@ India district polygons<br>
     )
 
     # ── Tabs ──────────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Illegal Sand Mining Map", "Blog", "Study on Sand Mining", "Correlations", "Research Narrative"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Illegal Sand Mining Map", "Correlations", "Study on Sand Mining", "Research Narrative", "Blog"])
 
     with tab1:
         st.markdown(
