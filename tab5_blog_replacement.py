@@ -1104,8 +1104,11 @@ Court-document language: "illegal mining," "no environmental clearance," "lease 
                         padding:1rem 1.2rem;margin-top:0.5rem;">
                 <div style="font-size:1.2rem;font-weight:700;color:{colour};
                             margin-bottom:0.5rem;">{verdict} (score: {score})</div>
-                {"".join(f"<div style='font-size:0.85rem;color:#5a4e3c;'>{r}</div>" for r in reasons) or
-                 "<div style='font-size:0.85rem;color:#9a8c78;'>No scoring keywords detected.</div>"}
+                {"".join(
+                    f"<div style='font-size:0.85rem;color:#5a4e3c;'>{r}</div>"
+                    for r in reasons
+                )
+                or "<div style='font-size:0.85rem;color:#9a8c78;'>No scoring keywords detected.</div>"}
             </div>
             """,
             unsafe_allow_html=True,
@@ -1189,13 +1192,7 @@ The central government should require state governments to source sand for PMAY
 projects exclusively from verified legal stockpiles, and make this a condition of central
 assistance release. Transform the demand-side driver into a demand-side enforcement lever.
 
-**2. National Sand Price Floor and Distribution System**
-
-Illegal sand is cheaper because it avoids royalties and transportation duties.
-A centrally-set price floor for legally mined sand , combined with state-managed
-distribution depots , would narrow the price differential that makes illegal supply competitive.
-
-**3. Continuous Environmental Monitoring Network**
+**2. Continuous Environmental Monitoring Network**
 
 The Prayagraj sensor analysis demonstrates the feasibility of continuous, automated
 water quality monitoring. Deploy conductivity and TDS monitoring buoys at 20–30 sites
@@ -1205,21 +1202,21 @@ Create an objective, legally admissible evidentiary record of environmental dama
 
     with rec_tab2:
         st.markdown("""
-**4. District-Level Enforcement Cells in High-Gap States**
+**3. District-Level Enforcement Cells in High-Gap States**
 
 The enforcement gap analysis identifies Himachal Pradesh, West Bengal, Jharkhand,
 Gujarat, and Goa as states where observed illegal mining greatly exceeds court-recognized
 cases. State governments here should deploy dedicated sand mining enforcement cells
 at the district level, with performance metrics tied to district collector accountability.
 
-**5. Machine-Verified Transport Permits (GPS + QR)**
+**4. Machine-Verified Transport Permits (GPS + QR)**
 
 Most illegal sand escapes detection not at extraction but during transport.
-A GPS-tracked, QR-code-verified e-permit system for sand transport vehicles , modelled
-on the e-way bill system under GST , would allow checkpoint interception without
+A GPS-tracked, QR-code-verified e-permit system for sand transport vehicles, modelled
+on the e-way bill system under GST, would allow checkpoint interception without
 monitoring every river stretch. Rajasthan and MP have piloted versions; standardise and mandate.
 
-**6. Dry-Season MGNREGA Expansion in Mining Districts**
+**5. Dry-Season MGNREGA Expansion in Mining Districts**
 
 The marginal worker correlation (r = +0.612) points to a labour supply problem:
 illegal mining offers seasonal income to workers without stable alternatives.
@@ -1229,41 +1226,41 @@ mining season) directly competes with illegal mining for the available labour po
 
     with rec_tab3:
         st.markdown("""
-**For the NGT: Standardised Compliance Requirements**
+**Standardised Compliance Requirements**
 
 NGT orders are the most common legal response to illegal mining, but enforcement varies wildly.
 The NGT should issue standardised compliance affidavit requirements and appoint state-level
 monitoring committees with fixed reporting timelines , reducing district administrator discretion.
 
-**For Prosecutors: Organised Crime Legislation**
+**Organised Crime Legislation**
 
-Most sand mining cases proceed under the Mines and Minerals Act or environmental statutes ,
+Most sand mining cases proceed under the Mines and Minerals Act or environmental statutes with
 relatively light penalties. The organised, cross-district, interstate nature of Sand Mafia operations
 (evidenced by the HH spatial cluster in Goa, Gujarat, MP, Rajasthan) qualifies these networks
-for prosecution under MCOCA and state equivalents. Enable asset forfeiture and longer custody.
+for prosecution under MCOCA and state equivalents. Enabling asset forfeiture and longer custody should be a consideration. 
 
-**For Researchers: District-Level Longitudinal Panel**
+**District-Level Longitudinal Panel**
 
 The primary limitation of this causal analysis is cross-sectional state-level data.
 A district-level, annually updated panel combining mining incidents, police deployment,
 PMAY completion rates, and environmental quality would allow much stronger causal identification.
 Encourage NDAP and state data agencies to prioritise this assembly.
 
-**For India Sand Watch: Close the Geographic Gaps**
+**Closing the Geographic Gaps**
 
 Northeastern states, Odisha, Chhattisgarh, and Kerala are nearly absent from the observation
-dataset despite significant rivers. Invest in trained observer networks in these states,
-targeting riverine communities directly affected by extraction.
+dataset despite significant rivers. Investing in trained observer networks in these states,
+targeting riverine communities directly affected by extraction would help plot a clearer picture.
         """)
 
     _divider()
 
-    # ── Closing ───────────────────────────────────────────────────────────────
-    _pull_quote(
-        '"Illegal sand mining is not primarily a story of poverty. '
-        "It is a story of construction demand, supply-state extraction, "
-        'and river corridor stress. The data are unambiguous." , Balasubramaniam & Garg, 2026'
-    )
+    # # ── Closing ───────────────────────────────────────────────────────────────
+    # _pull_quote(
+    #     '"Illegal sand mining is not primarily a story of poverty. '
+    #     "It is a story of construction demand, supply-state extraction, "
+    #     'and river corridor stress. The data are unambiguous." , Balasubramaniam & Garg, 2026'
+    # )
 
     st.markdown(
         """
@@ -1279,20 +1276,6 @@ targeting riverine communities directly affected by extraction.
                 concentrated in river corridors, enabled by enforcement failure,
                 and borne disproportionately by marginal communities.
             </p>
-            <p style="line-height:1.8;margin:0 0 0.8rem 0;">
-                The most actionable implications:
-            </p>
-            <ol style="line-height:2;padding-left:1.2rem;">
-                <li>Create legal sand supply channels in demand states so extraction pressure does not
-                    shift to vulnerable river basins.</li>
-                <li>Target enforcement in the primary supply states , Bihar, UP, and MP ,
-                    where extraction is concentrated and the enforcement gap is largest.</li>
-                <li>Couple housing policy with sustainable material policy and river monitoring.</li>
-                <li>Use spatial analysis and sensor data together to make enforcement
-                    proactive rather than reactive.</li>
-                <li>Fix the data: a national sand mining registry, not fragmented across seven
-                    incompatible systems, is the prerequisite for all other reform.</li>
-            </ol>
         </div>
         """,
         unsafe_allow_html=True,
